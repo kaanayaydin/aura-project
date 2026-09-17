@@ -1,60 +1,43 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-.venv/
-venv/
-*.egg-info/
-.pytest_cache/
+*$py.class
 
-# AI model agirliklari (repoya girmemeli)
-*.pt
-*.pth
-*.onnx
-*.safetensors
-models/
+# C extensions
+*.so
 
-# Ultralytics ayar/cikti dizinleri
-Ultralytics/
-runs/
-
-# Ortam degiskenleri
-.env
-.env.*
-
-# Java / Spring Boot / Maven
-target/
+# Distribution / packaging
+.Python
 build/
-*.class
-.mvn/wrapper/maven-wrapper.jar
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Flutter / Dart
-.dart_tool/
-.packages
-.flutter-plugins
-.flutter-plugins-dependencies
-**/ios/Pods/
-
-# IDE & OS
-.idea/
-.DS_Store
-__pycache__/
-*.pyc
+# Virtual environments
 venv/
-.env
-*.safetensors
-*.pth
-*.pt
-.DS_Store
-DEVLOG.md
-.cursorrules
-.cursor/
-*.log
-# Environment & Secrets
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets
 .env
 *.env
 config.local.json
 
-# Model Weights & Checkpoints
+# Model weights, datasets & heavy binaries
 *.pth
 *.pt
 *.safetensors
@@ -62,21 +45,26 @@ config.local.json
 *.onnx
 checkpoints/
 models/
-
-# Datasets, Uploads & Temporary Outputs
 uploads/
 outputs/
 results/
 data/
 *.log
 
-# AI / IDE / OS Artifacts
-DEVLOG.md
-.cursorrules
-.cursor/
-.vscode/
-.idea/
+# Operating System & IDE artifacts
 .DS_Store
-__pycache__/
-*.pyc
-venv/
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+# Virtual Environments
+**/.venv/
+**/venv/
+
+# Build artifacts
+**/target/
+build/
+dist/
+*.class
+*.jar
