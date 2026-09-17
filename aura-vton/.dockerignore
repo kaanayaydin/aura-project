@@ -1,0 +1,37 @@
+# Git / IDE
+.git
+.gitignore
+.cursor
+.vscode
+.idea
+*.md
+!README.md
+
+# Python
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+venv
+.env
+.env.*
+
+# Tests (image'a gerek yok; CI host'ta calisir)
+tests
+**/tests
+
+# Local caches / outputs
+.cache
+**/outputs
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# OS
+.DS_Store
+Thumbs.db

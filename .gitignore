@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# AI model agirliklari (repoya girmemeli)
+*.pt
+*.pth
+*.onnx
+*.safetensors
+models/
+
+# Ultralytics ayar/cikti dizinleri
+Ultralytics/
+runs/
+
+# Ortam degiskenleri
+.env
+.env.*
+
+# Java / Spring Boot / Maven
+target/
+build/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+**/ios/Pods/
+
+# IDE & OS
+.idea/
+.DS_Store
+__pycache__/
+*.pyc
+venv/
+.env
+*.safetensors
+*.pth
+*.pt
+.DS_Store
+DEVLOG.md
+.cursorrules
+.cursor/
+*.log
+# Environment & Secrets
+.env
+*.env
+config.local.json
+
+# Model Weights & Checkpoints
+*.pth
+*.pt
+*.safetensors
+*.bin
+*.onnx
+checkpoints/
+models/
+
+# Datasets, Uploads & Temporary Outputs
+uploads/
+outputs/
+results/
+data/
+*.log
+
+# AI / IDE / OS Artifacts
+DEVLOG.md
+.cursorrules
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+__pycache__/
+*.pyc
+venv/

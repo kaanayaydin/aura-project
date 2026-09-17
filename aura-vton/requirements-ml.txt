@@ -1,0 +1,14 @@
+# Gercek CatVTON inference (AURA_VTON_MOCK_MODEL=false)
+# Apple Silicon: pip install torch (MPS) + asagidakiler
+torch>=2.1.0
+diffusers>=0.30.0
+transformers>=4.40.0
+accelerate>=0.33.0
+huggingface_hub>=0.24.0
+safetensors>=0.4.0
+tqdm>=4.66.0
+# SCHP AutoMasker (INT8 ONNX — CPU; CatVTON MPS/CUDA ile paylasmaz)
+onnxruntime>=1.18.0
+numpy>=1.26.0
+# Pose guiding (opsiyonel ONNX; SCHP-pseudo fallback bagimlilik gerektirmez)
+# HF hub zaten CatVTON icin yuklu

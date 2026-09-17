@@ -1,0 +1,103 @@
+spring:
+  application:
+    name: aura-backend
+
+  datasource:
+    # docker-compose.yml icindeki postgres servisiyle ayni kimlik bilgileri
+    url: ${AURA_DB_URL:jdbc:postgresql://localhost:5432/aura}
+    username: ${AURA_DB_USER:aura}
+    password: ${AURA_DB_PASSWORD:aura}
+    driver-class-name: org.postgresql.Driver
+
+  # Base64 kesimler istek govdesini buyutuyor
+  servlet:
+    multipart:
+      max-request-size: 20MB
+
+  jpa:
+    # MVP asamasinda semayi Hibernate uretiyor; ilk kalici surumde Flyway'e gecilecek.
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: ${AURA_BACKEND_PORT:8080}
+
+aura:
+  # Vision servisinin adresi; sanal dolap kaydi bu servisten beslenecek.
+  vision:
+    base-url: ${AURA_VISION_URL:http://127.0.0.1:8000}
+    # true: dolap kaydinda /vision/normalize-garment (stüdyo framing)
+    normalize-garment-enabled: ${AURA_VISION_NORMALIZE:true}
+    connect-timeout-seconds: ${AURA_VISION_CONNECT_TIMEOUT:5}
+    read-timeout-seconds: ${AURA_VISION_READ_TIMEOUT:60}
+  wardrobe:
+    # Istekte userId gelmezse bu kullanici (yoksa olusturularak) kullanilir
+    default-username: ${AURA_DEFAULT_USERNAME:demo}
+    # Cozulmus gorsel icin ust sinir (byte)
+    max-image-bytes: ${AURA_MAX_IMAGE_BYTES:10485760}
+  weather:
+    default-latitude: ${AURA_WEATHER_LAT:41.0082}
+    default-longitude: ${AURA_WEATHER_LON:28.9784}
+    default-location-name: ${AURA_WEATHER_LOCATION:Istanbul}
+    # false yapilirsa hep mevsimsel simülasyon kullanilir (offline test)
+    prefer-live: ${AURA_WEATHER_LIVE:true}
+  chat:
+    ollama-base-url: ${AURA_OLLAMA_URL:http://127.0.0.1:11434}
+    model: ${AURA_OLLAMA_MODEL:llama3.2}
+    timeout-seconds: ${AURA_OLLAMA_TIMEOUT:90}
+    temperature: ${AURA_OLLAMA_TEMPERATURE:0.35}
+    # Ollama yoksa baglam tabanli yedek yanit (demo / offline)
+    fallback-enabled: ${AURA_CHAT_FALLBACK:true}
+  vton:
+    # false: Python aura-vton (Celery/Redis veya serverless URL); true: yerel mock (test)
+    mock-worker-enabled: ${AURA_VTON_MOCK:false}
+    mock-auto-advance-on-poll: ${AURA_VTON_AUTO_ADVANCE:false}
+    # local = FastAPI/Celery HTTP; runpod = RunPod Serverless (/run + /status/{id})
+    provider: ${AURA_VTON_PROVIDER:local}
+    # Yerel: http://127.0.0.1:8001 — RunPod: https://api.runpod.ai/v2/{ENDPOINT_ID}
+    worker-base-url: ${AURA_VTON_WORKER_URL:http://127.0.0.1:8001}
+    # RunPod Bearer (local modda bos birakilabilir)
+    api-key: ${AURA_RUNPOD_API_KEY:}
+    run-path: ${AURA_VTON_RUN_PATH:/run}
+    status-path-template: ${AURA_VTON_STATUS_PATH:/status/{id}}
+    # Cold-start / GPU inference icin genis timeout (saniye)
+    connect-timeout-seconds: ${AURA_VTON_CONNECT_TIMEOUT:10}
+    read-timeout-seconds: ${AURA_VTON_READ_TIMEOUT:180}
+    status-read-timeout-seconds: ${AURA_VTON_STATUS_TIMEOUT:30}
+    # Ilk timeout/ag hatasinda 1 retry + backoff (ms)
+    cold-start-retry-enabled: ${AURA_VTON_COLD_RETRY:true}
+    cold-start-retry-delay-ms: ${AURA_VTON_COLD_RETRY_MS:3000}
+    # Kullanici basina gunluk VTON deneme limiti (maliyet korumasi)
+    daily-limit: ${AURA_VTON_DAILY_LIMIT:5}
+  security:
+    jwt:
+      secret: ${AURA_JWT_SECRET:aura-dev-jwt-secret-change-me-32chars!!}
+      # Access token: 15 dakika
+      expiration-minutes: ${AURA_JWT_EXPIRATION_MINUTES:15}
+      issuer: ${AURA_JWT_ISSUER:aura-backend}
+    auth:
+      max-failed-attempts: ${AURA_AUTH_MAX_FAILED:5}
+      lock-duration-minutes: ${AURA_AUTH_LOCK_MINUTES:15}
+      rate-limit-per-minute: ${AURA_AUTH_RATE_LIMIT:10}
+      refresh-expiration-days: ${AURA_AUTH_REFRESH_DAYS:7}
+  storage:
+    # memory = test/offline; s3 = MinIO veya Cloudflare R2
+    provider: ${AURA_STORAGE_PROVIDER:s3}
+    endpoint: ${AURA_S3_ENDPOINT:http://127.0.0.1:9000}
+    public-base-url: ${AURA_S3_PUBLIC_BASE_URL:http://127.0.0.1:9000}
+    region: ${AURA_S3_REGION:us-east-1}
+    access-key: ${AURA_S3_ACCESS_KEY:aura_minio}
+    secret-key: ${AURA_S3_SECRET_KEY:aura_minio_secret}
+    path-style: ${AURA_S3_PATH_STYLE:true}
+    upload-ttl-seconds: ${AURA_S3_UPLOAD_TTL:900}
+    wardrobe-bucket: ${AURA_S3_WARDROBE_BUCKET:aura-wardrobe}
+    vton-bucket: ${AURA_S3_VTON_BUCKET:aura-vton}
+    avatars-bucket: ${AURA_S3_AVATARS_BUCKET:aura-avatars}
+
+logging:
+  level:
+    app.aura.backend: INFO

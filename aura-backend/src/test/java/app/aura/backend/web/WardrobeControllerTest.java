@@ -1,0 +1,305 @@
+package app.aura.backend.web;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import app.aura.backend.model.User;
+import app.aura.backend.repository.UserRepository;
+import app.aura.backend.repository.WardrobeItemRepository;
+import app.aura.backend.security.JwtService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Base64;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+/**
+ * /api/v1/wardrobe — JWT kimlik (v0.17.2).
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class WardrobeControllerTest {
+
+    private static final byte[] PNG_BYTES = {
+            (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01, 0x02, 0x03
+    };
+    private static final String PNG_BASE64 = Base64.getEncoder().encodeToString(PNG_BYTES);
+
+    private static final byte[] JPEG_BYTES = {
+            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10
+    };
+    private static final String JPEG_BASE64 = Base64.getEncoder().encodeToString(JPEG_BYTES);
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private WardrobeItemRepository wardrobeItemRepository;
+
+    @Autowired
+    private JwtService jwtService;
+
+    private String bearer(User user) {
+        return "Bearer " + jwtService.issueToken(user.getId(), user.getUsername());
+    }
+
+    @Test
+    void unauthenticatedCreateReturns401() throws Exception {
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"shirt","imageBase64":"%s"}
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Kimlik dogrulamasi gerekli"));
+    }
+
+    @Test
+    void unauthenticatedListReturns401() throws Exception {
+        mockMvc.perform(get("/api/v1/wardrobe/items"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createsItemForAuthenticatedUser() throws Exception {
+        User user = userRepository.save(new User("kaan", "kaan@aura.app"));
+        String token = bearer(user);
+
+        String body = """
+                {
+                  "category": "t-shirt",
+                  "categoryConfidence": 0.8734,
+                  "imageBase64": "%s",
+                  "color": "white"
+                }
+                """.formatted(PNG_BASE64);
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.userId").value(user.getId()))
+                .andExpect(jsonPath("$.category").value("t-shirt"))
+                .andExpect(jsonPath("$.categoryConfidence").value(0.8734))
+                .andExpect(jsonPath("$.imageBytes").value(PNG_BYTES.length))
+                .andExpect(jsonPath("$.imageMimeType").value("image/png"));
+
+        assertThat(wardrobeItemRepository.countByUserId(user.getId())).isEqualTo(1);
+    }
+
+    @Test
+    void bodyUserIdIsIgnoredInFavorOfJwtPrincipal() throws Exception {
+        User owner = userRepository.save(new User("jwt-owner", "jwt-owner@aura.app"));
+        User impostor = userRepository.save(new User("jwt-impostor", "jwt-impostor@aura.app"));
+        String token = bearer(owner);
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userId": %d,
+                                  "category": "jacket",
+                                  "imageBase64": "%s"
+                                }
+                                """.formatted(impostor.getId(), PNG_BASE64)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").value(owner.getId()));
+
+        assertThat(wardrobeItemRepository.countByUserId(owner.getId())).isEqualTo(1);
+        assertThat(wardrobeItemRepository.countByUserId(impostor.getId())).isZero();
+    }
+
+    @Test
+    void detectsJpegMimeType() throws Exception {
+        User user = userRepository.save(new User("jpeg-user", "jpeg@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"dress","imageBase64":"%s"}
+                                """.formatted(JPEG_BASE64)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imageMimeType").value("image/jpeg"));
+    }
+
+    @Test
+    void normalizesDataUriPayloadOnWrite() throws Exception {
+        User user = userRepository.save(new User("datauri", "datauri@aura.app"));
+        String token = bearer(user);
+        String body = """
+                {
+                  "category": "glasses",
+                  "imageBase64": "data:image/png;base64,%s"
+                }
+                """.formatted(PNG_BASE64);
+
+        String location = mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imageMimeType").value("image/png"))
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        mockMvc.perform(get(location).header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imageUrl").isNotEmpty())
+                .andExpect(jsonPath("$.imageBase64").doesNotExist());
+    }
+
+    @Test
+    void rejectsBlankCategoryWith400() throws Exception {
+        User user = userRepository.save(new User("blank-cat", "blank@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "  ",
+                                  "imageBase64": "%s"
+                                }
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.category").exists());
+    }
+
+    @Test
+    void rejectsMalformedBase64With400() throws Exception {
+        User user = userRepository.save(new User("bad-b64", "badb64@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "shirt",
+                                  "imageBase64": "bu-gecerli-base64-degil!!!"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Gecersiz gorsel yuku"));
+    }
+
+    @Test
+    void rejectsConfidenceAboveOneWith400() throws Exception {
+        User user = userRepository.save(new User("conf", "conf@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "shirt",
+                                  "categoryConfidence": 1.5,
+                                  "imageBase64": "%s"
+                                }
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.categoryConfidence").exists());
+    }
+
+    @Test
+    void listsItemsWithoutImagesByDefault() throws Exception {
+        User user = userRepository.save(new User("listeci", "listeci@aura.app"));
+        String token = bearer(user);
+        createItem(user, "shirt");
+        createItem(user, "pants");
+
+        mockMvc.perform(get("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].category").value("shirt"))
+                .andExpect(jsonPath("$[0].imageBase64").doesNotExist())
+                .andExpect(jsonPath("$[0].imageDataUri").doesNotExist())
+                .andExpect(jsonPath("$[0].imageMimeType").value("image/png"))
+                .andExpect(jsonPath("$[0].imageUrl").isNotEmpty());
+    }
+
+    @Test
+    void listsItemsWithImagesWhenRequested() throws Exception {
+        User user = userRepository.save(new User("resimci", "resimci@aura.app"));
+        createItem(user, "jacket");
+
+        mockMvc.perform(get("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .param("includeImages", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].imageUrl").isNotEmpty())
+                .andExpect(jsonPath("$[0].imageBase64").doesNotExist());
+    }
+
+    @Test
+    void returnsSingleItemWithImage() throws Exception {
+        User user = userRepository.save(new User("tekil", "tekil@aura.app"));
+        Long itemId = createItem(user, "sneakers");
+
+        mockMvc.perform(get("/api/v1/wardrobe/items/{id}", itemId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(itemId))
+                .andExpect(jsonPath("$.category").value("sneakers"))
+                .andExpect(jsonPath("$.imageUrl").isNotEmpty())
+                .andExpect(jsonPath("$.imageMimeType").value("image/png"))
+                .andExpect(jsonPath("$.imageBase64").doesNotExist());
+    }
+
+    @Test
+    void foreignItemReturns403() throws Exception {
+        User owner = userRepository.save(new User("own-item", "own-item@aura.app"));
+        User other = userRepository.save(new User("other-item", "other-item@aura.app"));
+        Long itemId = createItem(owner, "coat");
+
+        mockMvc.perform(get("/api/v1/wardrobe/items/{id}", itemId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(other)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Dolap erisim engeli"));
+    }
+
+    @Test
+    void returns404ForUnknownItem() throws Exception {
+        User user = userRepository.save(new User("miss", "miss@aura.app"));
+        mockMvc.perform(get("/api/v1/wardrobe/items/{id}", 987654)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Dolap parcasi bulunamadi"));
+    }
+
+    private Long createItem(User user, String category) throws Exception {
+        String body = """
+                {"category": "%s", "imageBase64": "%s"}
+                """.formatted(category, PNG_BASE64);
+
+        String response = mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode node = objectMapper.readTree(response);
+        return node.get("id").asLong();
+    }
+}

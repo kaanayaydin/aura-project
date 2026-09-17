@@ -1,0 +1,35 @@
+# Yerel aura-vton API (mock, ucretsiz). Kok compose ile:
+#   docker compose -f docker-compose.yml -f aura-vton/docker-compose.vton.yml --profile vton up --build
+#
+# GPU/serverless image ayri build edilir; bu profil harici GPU maliyeti cikarmaz.
+
+services:
+  aura-vton-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: python:3.11-slim-bookworm
+        INSTALL_ML: "false"
+        PREWARM_ON_BUILD: "false"
+    image: aura-vton:local
+    container_name: aura-vton-api
+    ports:
+      - "${AURA_VTON_PORT:-8001}:8001"
+    environment:
+      EXECUTION_MODE: api
+      AURA_VTON_MOCK_MODEL: "true"
+      AURA_VTON_PREWARM: "false"
+      AURA_VTON_REDIS_URL: redis://redis:6379/0
+      AURA_VTON_PORT: "8001"
+      AURA_VTON_CACHE_DIR: /root/.cache/aura-vton
+      AURA_VTON_OUTPUT_DIR: /root/.cache/aura-vton/outputs
+      AURA_VTON_PUBLIC_BASE_URL: http://127.0.0.1:8001
+    volumes:
+      - aura-vton-cache:/root/.cache/aura-vton
+    profiles:
+      - vton
+
+volumes:
+  aura-vton-cache:
+    name: aura-vton-cache

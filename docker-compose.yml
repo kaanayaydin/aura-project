@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aura-postgres
+    restart: unless-stopped
+    ports:
+      - "${AURA_DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${AURA_DB_NAME:-aura}
+      POSTGRES_USER: ${AURA_DB_USER:-aura}
+      POSTGRES_PASSWORD: ${AURA_DB_PASSWORD:-aura}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - aura-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AURA_DB_USER:-aura} -d ${AURA_DB_NAME:-aura}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: aura-redis
+    restart: unless-stopped
+    ports:
+      - "${AURA_REDIS_PORT:-6379}:6379"
+    volumes:
+      - aura-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3 uyumlu object storage (yerel MinIO). Cloudflare R2 ayni S3 API ile baglanir.
+  # Not: MinIO Docker Hub'da `latest` yok; resmi Quay RELEASE etiketleri kullanilir.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: aura-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "${AURA_MINIO_API_PORT:-9000}:9000"
+      - "${AURA_MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${AURA_S3_ACCESS_KEY:-aura_minio}
+      MINIO_ROOT_PASSWORD: ${AURA_S3_SECRET_KEY:-aura_minio_secret}
+    volumes:
+      - aura-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z
+    container_name: aura-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      set -e;
+      until mc alias set aura http://minio:9000 $${AURA_S3_ACCESS_KEY:-aura_minio} $${AURA_S3_SECRET_KEY:-aura_minio_secret}; do
+        echo 'MinIO bekleniyor...'; sleep 2;
+      done;
+      mc mb --ignore-existing aura/aura-wardrobe;
+      mc mb --ignore-existing aura/aura-vton;
+      mc mb --ignore-existing aura/aura-avatars;
+      mc anonymous set download aura/aura-wardrobe || true;
+      mc anonymous set download aura/aura-vton || true;
+      mc anonymous set download aura/aura-avatars || true;
+      echo 'MinIO bucketlari hazir (wardrobe/vton/avatars public-read)';
+      "
+
+volumes:
+  aura-postgres-data:
+    name: aura-postgres-data
+  aura-redis-data:
+    name: aura-redis-data
+  aura-minio-data:
+    name: aura-minio-data

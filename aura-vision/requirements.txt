@@ -1,0 +1,23 @@
+# Aura Vision Service - bagimliliklar
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+Pillow==11.1.0
+pydantic==2.10.5
+
+# Nesne tespiti (YOLOv8)
+ultralytics==8.4.147
+
+# Segmentasyon (SAM) ve anlamsal etiketleme (CLIP) icin model calistirma
+torch==2.14.0
+transformers==5.17.0
+
+# Opsiyonel: stüdyo dekupaj (yoksa chroma fallback)
+# rembg==2.0.57
+
+# Java backend'ine opsiyonel dolap senkronizasyonu
+httpx==0.28.1
+
+# Test
+pytest==8.3.4

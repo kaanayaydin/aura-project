@@ -1,0 +1,65 @@
+# PostgreSQL ayakta olmadan sema ve iliskileri dogrulamak icin bellek ici veritabani.
+spring:
+  datasource:
+    url: jdbc:h2:mem:aura;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+
+aura:
+  vision:
+    base-url: http://127.0.0.1:9
+    normalize-garment-enabled: false
+    connect-timeout-seconds: 1
+    read-timeout-seconds: 2
+  weather:
+    prefer-live: false
+    default-location-name: Istanbul
+    default-latitude: 41.0082
+    default-longitude: 28.9784
+  chat:
+    ollama-base-url: http://127.0.0.1:9
+    model: llama3.2
+    timeout-seconds: 2
+    fallback-enabled: true
+  vton:
+    mock-worker-enabled: true
+    mock-auto-advance-on-poll: true
+    provider: local
+    worker-base-url: http://127.0.0.1:8001
+    api-key: ""
+    run-path: /run
+    status-path-template: /status/{id}
+    connect-timeout-seconds: 2
+    read-timeout-seconds: 5
+    status-read-timeout-seconds: 2
+    cold-start-retry-enabled: true
+    cold-start-retry-delay-ms: 1
+    # Mevcut VTON entegrasyon testleri icin genis; kota testleri ayri property ile 5 kullanir
+    daily-limit: 100
+  storage:
+    provider: memory
+    endpoint: http://127.0.0.1:9000
+    public-base-url: http://127.0.0.1:9000
+    region: us-east-1
+    access-key: test
+    secret-key: test
+    path-style: true
+    upload-ttl-seconds: 900
+    wardrobe-bucket: aura-wardrobe
+    vton-bucket: aura-vton
+    avatars-bucket: aura-avatars
+  security:
+    jwt:
+      secret: test-jwt-secret-key-32-characters!!
+      expiration-minutes: 15
+      issuer: aura-backend-test
+    auth:
+      max-failed-attempts: 5
+      lock-duration-minutes: 15
+      rate-limit-per-minute: 1000
+      refresh-expiration-days: 7
