@@ -105,6 +105,17 @@ class GarmentNormalizer:
         job_id: Optional[str] = None,
         skip_orientation: bool = False,
     ) -> NormalizeResult:
+        """Dekupaj + (opsiyonel polish) + 3:4 framing.
+
+        ``skip_orientation=True`` (onaylı yükleme / alreadyNormalized):
+        - rembg hiç denenmez (``prefer_rembg=False`` yetmez; ``_cutout`` 3. dalı
+          ``enabled and not prefer`` ile yine rembg çalıştırırdı).
+        - polish zinciri tamamen atlanır: askı temizliği, deskew, kardinal
+          rotasyon/ensemble **ve** catalog press. Yalnız ``compose_studio``
+          (3:4 crop/letterbox) uygulanır.
+        - Anlamlı alfa varsa o kullanılır; yoksa chroma. Silüeti yeniden
+          kesmez.
+        """
         if not raw_bytes:
             raise ValueError("Bos gorsel")
 
@@ -118,20 +129,30 @@ class GarmentNormalizer:
         commit = git_commit_short()
         polish_trace: dict = {}
 
-        # Onaylı yükleme: rotasyonu tekrar hesaplama; rembg de silüeti yiyebilir.
-        if skip_orientation and force_rembg is None:
+        # skip_orientation: rembg TAMAMEN kapalı. prefer=False 3. dalı
+        # (studio_rembg_enabled and not prefer) kapatmazdı; üretim
+        # AURA_STUDIO_REMBG=true iken onaylı PNG yine rembg'e gidiyordu.
+        if skip_orientation:
             prefer_rembg = False
+            allow_rembg = force_rembg is True
         else:
-            prefer_rembg = settings.studio_prefer_rembg if force_rembg is None else bool(force_rembg)
+            prefer_rembg = (
+                settings.studio_prefer_rembg if force_rembg is None else bool(force_rembg)
+            )
+            allow_rembg = True
         try:
-            cutout, source = self._cutout(image, prefer_rembg=prefer_rembg)
+            cutout, source = self._cutout(
+                image, prefer_rembg=prefer_rembg, allow_rembg=allow_rembg
+            )
         except Exception:
             logger.exception("Cutout basarisiz — chroma fallback")
             cutout = chroma_cutout(image.convert("RGB"))
             source = "chroma"
 
         if skip_orientation:
-            logger.info("skip_orientation: deskew/cardinal/ensemble atlandi — yalniz 3:4 framing")
+            logger.info(
+                "skip_orientation: rembg/hanger/deskew/cardinal/press atlandi — yalniz 3:4 framing"
+            )
             polish_trace["rotation_method"] = "skipped_already_normalized"
             polish_trace["rotation_deg_applied"] = 0
             polish_trace["requires_confirmation"] = False
@@ -294,11 +315,25 @@ class GarmentNormalizer:
         result = self.normalize(raw_bytes, **kwargs)
         return base64.b64encode(result.png_bytes).decode("ascii"), result
 
-    def _cutout(self, image: Image.Image, *, prefer_rembg: bool) -> tuple[Image.Image, str]:
+    def _cutout(
+        self,
+        image: Image.Image,
+        *,
+        prefer_rembg: bool,
+        allow_rembg: bool = True,
+    ) -> tuple[Image.Image, str]:
+        """Cutout kaynak sırası.
+
+        1) rembg (allow + prefer + enabled)
+        2) anlamlı alfa
+        3) rembg fallback (allow + enabled + not prefer) — skip_orientation
+           bunu da kapatır; aksi halde üretim rembg açıkken yine çalışırdı
+        4) chroma
+        """
         rgb = image.convert("RGB")
         rgba = image.convert("RGBA") if image.mode in ("RGBA", "LA", "PA") else None
 
-        if prefer_rembg and settings.studio_rembg_enabled:
+        if allow_rembg and prefer_rembg and settings.studio_rembg_enabled:
             rembg_out = self._try_rembg(rgb)
             if rembg_out is not None:
                 fixed = refine_garment_alpha(rembg_out)
@@ -310,7 +345,7 @@ class GarmentNormalizer:
             logger.info("Normalize cutout: existing alpha (refine)")
             return fixed, "alpha"
 
-        if settings.studio_rembg_enabled and not prefer_rembg:
+        if allow_rembg and settings.studio_rembg_enabled and not prefer_rembg:
             rembg_out = self._try_rembg(rgb)
             if rembg_out is not None:
                 fixed = refine_garment_alpha(rembg_out)

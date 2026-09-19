@@ -1,18 +1,21 @@
 """Onaylı 90/270 yükleme: rotasyon korunur, 3:4 framing uygulanır (B1).
 
-skip_orientation=true deskew/cardinal/ensemble atlar; compose_studio 3:4 yapar.
+skip_orientation=true: rembg + askı temizliği + deskew/cardinal/ensemble +
+catalog press atlanır; yalnız compose_studio (3:4) uygulanır.
 """
 
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from app.services.garment_normalizer import garment_normalizer
+from app.core.config import settings
+from app.services.garment_normalizer import GarmentNormalizer, garment_normalizer
 from app.services.garment_polish import detect_neckline_edge, rotate_neckline_to_north
 from app.services.garment_studio import canvas_size_for_aspect
 
@@ -150,3 +153,143 @@ def test_normalize_endpoint_skip_orientation_form():
     assert body["rotation_deg_applied"] == 0
     assert body["width"] < body["height"]
     assert body["aspect"] == "3:4"
+
+
+def _rgb_studio_png() -> bytes:
+    """Flutter onaylı yükleme gibi: RGB stüdyo, alfa yok."""
+    img = Image.new("RGB", (256, 192), (248, 249, 250))
+    px = img.load()
+    for y in range(40, 152):
+        for x in range(30, 226):
+            px[x, y] = (200, 40, 40)
+    return _png_bytes(img)
+
+
+def _count_try_rembg(monkeypatch):
+    calls = {"n": 0}
+
+    def fake(rgb):
+        calls["n"] += 1
+        out = Image.new("RGBA", rgb.size, (0, 0, 0, 0))
+        box = (rgb.size[0] // 4, rgb.size[1] // 4, 3 * rgb.size[0] // 4, 3 * rgb.size[1] // 4)
+        crop = out.crop(box)
+        crop.paste((180, 50, 50, 255), (0, 0, crop.size[0], crop.size[1]))
+        out.paste(crop, box)
+        return out
+
+    monkeypatch.setattr(GarmentNormalizer, "_try_rembg", staticmethod(fake))
+    return calls
+
+
+def test_skip_orientation_never_calls_rembg_when_production_flags_on(monkeypatch):
+    """F2: AURA_STUDIO_REMBG=true + PREFER=true + skip_orientation → rembg 0.
+
+    Eski kod prefer=False ile 3. dalı (enabled and not prefer) açık bırakıyordu.
+    Mock, canlı koşudaki _try_rembg sayacını simüle eder.
+    """
+    object.__setattr__(settings, "studio_rembg_enabled", True)
+    object.__setattr__(settings, "studio_prefer_rembg", True)
+    calls = _count_try_rembg(monkeypatch)
+    result = garment_normalizer.normalize(
+        _rgb_studio_png(),
+        skip_orientation=True,
+        drop_shadow=False,
+        long_side=LONG_SIDE,
+    )
+    assert calls["n"] == 0
+    assert result.cutout_source == "chroma"
+    assert result.rotation_method == "skipped_already_normalized"
+    assert (result.width, result.height) == PORTRAIT
+
+
+def test_prefer_false_fallback_rembg_runs_without_skip(monkeypatch):
+    """3. dal niyeti: rembg açık, prefer kapalı, skip yok → alfa yoksa rembg."""
+    object.__setattr__(settings, "studio_rembg_enabled", True)
+    object.__setattr__(settings, "studio_prefer_rembg", False)
+    calls = _count_try_rembg(monkeypatch)
+    result = garment_normalizer.normalize(
+        _rgb_studio_png(),
+        skip_orientation=False,
+        drop_shadow=False,
+        long_side=LONG_SIDE,
+    )
+    assert calls["n"] == 1
+    assert result.cutout_source == "rembg"
+
+
+def test_prefer_false_fallback_rembg_skipped_with_skip_orientation(monkeypatch):
+    """F2 regresyon: 3. dal skip_orientation iken de kapalı."""
+    object.__setattr__(settings, "studio_rembg_enabled", True)
+    object.__setattr__(settings, "studio_prefer_rembg", False)
+    calls = _count_try_rembg(monkeypatch)
+    result = garment_normalizer.normalize(
+        _rgb_studio_png(),
+        skip_orientation=True,
+        drop_shadow=False,
+        long_side=LONG_SIDE,
+    )
+    assert calls["n"] == 0
+    assert result.cutout_source != "rembg"
+
+
+def test_skip_orientation_prefers_existing_alpha_not_rembg(monkeypatch):
+    object.__setattr__(settings, "studio_rembg_enabled", True)
+    object.__setattr__(settings, "studio_prefer_rembg", True)
+    calls = _count_try_rembg(monkeypatch)
+    result = garment_normalizer.normalize(
+        _png_bytes(_rgba_tshirt_neckline()),
+        skip_orientation=True,
+        drop_shadow=False,
+        long_side=LONG_SIDE,
+    )
+    assert calls["n"] == 0
+    assert result.cutout_source == "alpha"
+
+
+@pytest.mark.skipif(
+    os.environ.get("AURA_STUDIO_REMBG_LIVE") != "1",
+    reason="Canlı rembg: AURA_STUDIO_REMBG_LIVE=1 (model indirir; CI varsayılan kapalı)",
+)
+@pytest.mark.parametrize(
+    "case_id,rel",
+    [
+        ("real_duz_r90", "images/real_duz_r90.png"),
+        ("real_duz_r270", "images/real_duz_r270.png"),
+        ("synthetic_uneck_r270", "images/synthetic_uneck_r270.png"),
+    ],
+    ids=["real_duz_r90", "real_duz_r270", "synthetic_uneck_r270"],
+)
+def test_live_skip_orientation_does_not_invoke_real_rembg(case_id, rel, monkeypatch):
+    """Canlı rembg + üretim bayrakları + skip_orientation; _try_rembg sarmalayıcı sayar."""
+    object.__setattr__(settings, "studio_rembg_enabled", True)
+    object.__setattr__(settings, "studio_prefer_rembg", True)
+    orig = GarmentNormalizer._try_rembg
+    calls = {"n": 0}
+
+    def wrapped(rgb):
+        calls["n"] += 1
+        return orig(rgb)
+
+    monkeypatch.setattr(GarmentNormalizer, "_try_rembg", staticmethod(wrapped))
+    raw = (ROOT / rel).read_bytes()
+    first = garment_normalizer.normalize(
+        raw, skip_orientation=False, drop_shadow=False, long_side=LONG_SIDE
+    )
+    rembg_on_full = calls["n"]
+    assert rembg_on_full >= 1, (
+        f"{case_id}: tam normalize _try_rembg cagirmadi (canli rembg kirik?)"
+    )
+    calls["n"] = 0
+    confirmed = _rotate_ccw(first.image, _USER_CCW["left" if "r90" in case_id else "right"])
+    framed = garment_normalizer.normalize(
+        _png_bytes(confirmed),
+        skip_orientation=True,
+        drop_shadow=False,
+        long_side=LONG_SIDE,
+    )
+    assert framed.rotation_method == "skipped_already_normalized", case_id
+    assert (framed.width, framed.height) == PORTRAIT, case_id
+    assert calls["n"] == 0, (
+        f"{case_id}: skip_orientation iken gerçek rembg {calls['n']} kez çağrıldı "
+        f"(tam normalize {rembg_on_full} kez)"
+    )

@@ -51,8 +51,8 @@ public class VisionGarmentClient {
     /**
      * Ham/cutout baytlari stüdyo PNG'ye cevirir. Basarisizsa empty.
      *
-     * {@code skipOrientation=true}: Vision deskew/cardinal/ensemble atlar,
-     * yalniz 3:4 framing uygular (onayli rotasyonu ezmez).
+     * {@code skipOrientation=true}: Vision rembg + aski temizligi + deskew/cardinal
+     * + catalog press atlar, yalniz 3:4 framing uygular (onayli rotasyonu ezmez).
      */
     public Optional<byte[]> normalizeGarmentPng(byte[] imageBytes, String filename) {
         return normalizeGarmentPng(imageBytes, filename, false);

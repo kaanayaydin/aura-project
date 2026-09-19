@@ -132,7 +132,10 @@ async def normalize_garment(
     drop_shadow: Optional[str] = Form(None, description="true/false/1/0"),
     skip_orientation: Optional[str] = Form(
         None,
-        description="true: deskew/cardinal/ensemble atla, yalniz 3:4 framing",
+        description=(
+            "true: rembg + askı temizliği + deskew/cardinal/ensemble + catalog press "
+            "atlanır; yalnız 3:4 framing uygulanır (onaylı rotasyonu ezmez)"
+        ),
     ),
     framing_only: Optional[str] = Form(
         None,
