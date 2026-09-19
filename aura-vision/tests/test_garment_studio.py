@@ -203,3 +203,377 @@ def test_normalize_endpoint_logs_and_returns_200():
     assert body["status"] == "success"
     assert body["cutout_source"] in ("rembg", "chroma", "alpha")
     assert len(body["image_base64"]) > 32
+
+
+def _rgba_shirt_with_hanger(size=(160, 220)) -> Image.Image:
+    """Tişört + üstte ince askı çubuğu (yaka dışına taşan)."""
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    px = img.load()
+    # Gövde
+    for y in range(55, 200):
+        for x in range(40, 120):
+            px[x, y] = (180, 50, 50, 255)
+    # Omuz genişliği
+    for y in range(48, 55):
+        for x in range(35, 125):
+            px[x, y] = (180, 50, 50, 255)
+    # İnce askı kancası (üstte dar)
+    for y in range(8, 48):
+        for x in range(78, 82):
+            px[x, y] = (90, 90, 90, 255)
+    for x in range(60, 100):
+        px[x, 10] = (90, 90, 90, 255)
+    return img
+
+
+def test_remove_hanger_clears_thin_top_protrusion():
+    from app.services.garment_polish import remove_hanger_artifacts
+
+    img = _rgba_shirt_with_hanger()
+    assert np.asarray(img.split()[-1])[12, 80] > 200  # askı var
+    cleaned = remove_hanger_artifacts(img)
+    alpha = np.asarray(cleaned.split()[-1])
+    assert alpha[12, 80] < 64  # askı silindi
+    assert alpha[100, 80] > 200  # gövde kaldı
+
+
+def test_deskew_reduces_tilt_toward_vertical():
+    from app.services.garment_polish import deskew_garment, estimate_deskew_angle_deg
+
+    base = Image.new("RGBA", (200, 260), (0, 0, 0, 0))
+    px = base.load()
+    for y in range(40, 220):
+        for x in range(70, 130):
+            px[x, y] = (40, 120, 200, 255)
+    # 35° çapraz — axis-snap ile düzelmeli (≤45°)
+    tilted = base.rotate(35, expand=True, fillcolor=(0, 0, 0, 0))
+    before = abs(estimate_deskew_angle_deg(np.asarray(tilted.split()[-1])))
+    upright, applied = deskew_garment(tilted, min_abs_deg=0.5, max_abs_deg=45.0)
+    after = abs(estimate_deskew_angle_deg(np.asarray(upright.split()[-1])))
+    assert before > 15.0
+    assert abs(applied) > 15.0
+    assert after < 8.0
+
+
+def _rgba_tshirt_neckline(size=(180, 240)) -> Image.Image:
+    """Omuzlu tişört + üstte U-yaka + düz geniş etek."""
+    w, h = size
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    px = img.load()
+    for y in range(70, 225):
+        for x in range(48, 132):
+            px[x, y] = (200, 60, 60, 255)
+    for y in range(52, 78):
+        for x in range(22, 158):
+            px[x, y] = (200, 60, 60, 255)
+    cx, cy, r = w // 2, 55, 24
+    for y in range(35, 82):
+        for x in range(cx - r - 2, cx + r + 3):
+            if (x - cx) ** 2 + (y - cy) ** 2 <= r * r and y < cy + 10:
+                px[x, y] = (0, 0, 0, 0)
+    for y in range(218, 228):
+        for x in range(50, 130):
+            px[x, y] = (200, 60, 60, 255)
+    return img
+
+
+def test_neckline_east_uses_cv2_rotate_90_ccw():
+    """Sağ kenar yakası → ROTATE_90_COUNTERCLOCKWISE; skorlar loglanır."""
+    from app.services.garment_polish import (
+        align_garment_upright,
+        compute_orientation_scores,
+        detect_neckline_edge,
+        rotate_neckline_to_north,
+    )
+
+    shirt = _rgba_tshirt_neckline()
+    sideways = shirt.rotate(270, expand=True, fillcolor=(0, 0, 0, 0))
+    scores = compute_orientation_scores(np.asarray(sideways.split()[-1]))
+    assert scores["best"] == "right"
+    assert scores["combined"]["right"] >= scores["combined"]["top"]
+
+    fixed, deg, edge, method = rotate_neckline_to_north(sideways)
+    assert edge == "right" and deg == 90
+    assert method == "cv2.ROTATE_90_COUNTERCLOCKWISE"
+    assert detect_neckline_edge(np.asarray(fixed.split()[-1])) == "top"
+    # Portre bbox
+    a = np.asarray(fixed.split()[-1]) > 127
+    ys, xs = np.where(a)
+    assert (ys.max() - ys.min()) >= (xs.max() - xs.min()) * 0.9
+
+    out = align_garment_upright(sideways)
+    assert detect_neckline_edge(np.asarray(out.split()[-1])) == "top"
+
+
+def test_apply_cardinal_rotation_mapping():
+    from app.services.garment_polish import apply_cardinal_rotation
+
+    shirt = _rgba_tshirt_neckline()
+    out, deg, method = apply_cardinal_rotation(shirt, "right")
+    assert deg == 90 and method == "cv2.ROTATE_90_COUNTERCLOCKWISE"
+    assert out.size[0] == shirt.size[1]
+    out2, deg2, method2 = apply_cardinal_rotation(shirt, "top")
+    assert deg2 == 0 and method2 == "none" and out2.size == shirt.size
+
+
+def test_low_confidence_skips_cardinal_rotation(monkeypatch):
+    """Yakin cagri: deskew koru, 90/270 uygulama."""
+    from app.services import garment_polish as gp
+
+    shirt = _rgba_tshirt_neckline()
+    sideways = shirt.rotate(270, expand=True, fillcolor=(0, 0, 0, 0))
+
+    def fake_scores(_alpha):
+        return {
+            "best": "right",
+            "low_confidence": True,
+            "score_gap": 0.01,
+            "combined": {"top": 0.2, "right": 0.21, "bottom": 0.19, "left": 0.18},
+        }
+
+    monkeypatch.setattr(gp, "compute_orientation_scores", fake_scores)
+    out, deg, edge, method = gp.rotate_neckline_to_north(sideways)
+    assert edge == "right"
+    assert deg == 0
+    assert method == "skipped_low_confidence"
+    assert out.size == sideways.size
+
+    forced, fdeg, fedge, fmethod = gp.rotate_neckline_to_north(
+        sideways, apply_if_low_confidence=True
+    )
+    assert fedge == "right" and fdeg == 90
+    assert fmethod == "cv2.ROTATE_90_COUNTERCLOCKWISE"
+    assert forced.size != sideways.size or forced.size[0] != sideways.size[0]
+
+
+def test_medium_confidence_skips_pending_confirmation():
+    """Geçici köprü: medium otomatik 90/270 uygulamaz; etiket low olmaz."""
+    from app.services.garment_polish import rotate_neckline_to_north
+
+    shirt = _rgba_tshirt_neckline()
+    sideways = shirt.rotate(270, expand=True, fillcolor=(0, 0, 0, 0))
+    scores = {
+        "best": "right",
+        "low_confidence": False,
+        "ensemble_confidence": "medium",
+        "score_gap": 0.2,
+        "combined": {"top": 0.2, "right": 0.5, "bottom": 0.19, "left": 0.18},
+    }
+    out, deg, edge, method = rotate_neckline_to_north(sideways, scores=scores)
+    assert edge == "right"
+    assert deg == 0
+    assert method == "skipped_pending_confirmation"
+    assert out.size == sideways.size
+
+
+def test_high_confidence_still_applies_cardinal_rotation():
+    """high davranışına dokunma: 90 hâlâ uygulanır."""
+    from app.services.garment_polish import rotate_neckline_to_north
+
+    shirt = _rgba_tshirt_neckline()
+    sideways = shirt.rotate(270, expand=True, fillcolor=(0, 0, 0, 0))
+    scores = {
+        "best": "right",
+        "low_confidence": False,
+        "ensemble_confidence": "high",
+        "score_gap": 0.4,
+        "combined": {"top": 0.2, "right": 0.8, "bottom": 0.1, "left": 0.1},
+    }
+    out, deg, edge, method = rotate_neckline_to_north(sideways, scores=scores)
+    assert edge == "right"
+    assert deg == 90
+    assert method == "cv2.ROTATE_90_COUNTERCLOCKWISE"
+    assert out.size != sideways.size or out.size[0] != sideways.size[0]
+
+
+def test_continuous_deskew_and_polarity_180():
+    from app.services.garment_polish import (
+        align_garment_upright,
+        detect_neckline_edge,
+        deskew_garment,
+        neckline_upright_score,
+        should_flip_180,
+    )
+
+    shirt = _rgba_tshirt_neckline()
+    alpha0 = np.asarray(shirt.split()[-1])
+    assert detect_neckline_edge(alpha0) == "top"
+    assert not should_flip_180(alpha0)
+
+    tilted = shirt.rotate(35, expand=True, fillcolor=(0, 0, 0, 0))
+    _deskewed, ang = deskew_garment(tilted, max_abs_deg=45.0)
+    assert abs(ang) > 15.0
+    out = align_garment_upright(tilted)
+    assert detect_neckline_edge(np.asarray(out.split()[-1])) == "top"
+    assert neckline_upright_score(np.asarray(out.split()[-1]) > 127) > 0.0
+
+    upside = shirt.rotate(180, expand=True, fillcolor=(0, 0, 0, 0))
+    assert detect_neckline_edge(np.asarray(upside.split()[-1])) == "bottom"
+    assert should_flip_180(np.asarray(upside.split()[-1]))
+    fixed = align_garment_upright(upside)
+    assert detect_neckline_edge(np.asarray(fixed.split()[-1])) == "top"
+
+
+def test_collar_preferred_over_hem_notch():
+    from app.services.garment_polish import align_garment_upright, detect_neckline_edge
+
+    shirt = _rgba_tshirt_neckline()
+    px = shirt.load()
+    w, h = shirt.size
+    for y in range(h - 25, h - 5):
+        for x in range(w // 2 - 15, w // 2 + 15):
+            if (x - w // 2) ** 2 + (y - (h - 8)) ** 2 < 120:
+                px[x, y] = (0, 0, 0, 0)
+    assert detect_neckline_edge(np.asarray(shirt.split()[-1])) == "top"
+    out = align_garment_upright(shirt)
+    assert detect_neckline_edge(np.asarray(out.split()[-1])) == "top"
+
+
+def test_align_garment_upright_handles_diagonal():
+    from app.services.garment_polish import align_garment_upright, detect_neckline_edge
+
+    shirt = _rgba_tshirt_neckline()
+    diagonal = shirt.rotate(35, expand=True, fillcolor=(0, 0, 0, 0))
+    out = align_garment_upright(diagonal)
+    assert detect_neckline_edge(np.asarray(out.split()[-1])) == "top"
+
+
+def test_catalog_press_preserves_alpha_and_softens():
+    from app.services.garment_polish import catalog_press
+    import cv2
+
+    img = Image.new("RGBA", (80, 100), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(20, 80):
+        for x in range(20, 60):
+            # Yapay "kırışıklık" şeritleri
+            v = 160 + (18 if (x + y) % 6 < 3 else -18)
+            px[x, y] = (v, v, v, 255)
+    pressed = catalog_press(img, diameter=9, strong=True, detail_keep=0.2)
+    assert pressed.mode == "RGBA"
+    a0 = np.asarray(img.split()[-1])
+    a1 = np.asarray(pressed.split()[-1])
+    assert np.array_equal(a0 > 127, a1 > 127)
+    # Yüksek frekans enerjisi (Laplacian) düşmeli
+    g0 = cv2.cvtColor(np.asarray(img.convert("RGB")), cv2.COLOR_RGB2GRAY)
+    g1 = cv2.cvtColor(np.asarray(pressed.convert("RGB")), cv2.COLOR_RGB2GRAY)
+    m = a0 > 127
+    e0 = float(cv2.Laplacian(g0, cv2.CV_32F)[m].var())
+    e1 = float(cv2.Laplacian(g1, cv2.CV_32F)[m].var())
+    assert e1 < e0 * 0.75
+
+
+def test_polish_chain_on_cutout():
+    from app.services.garment_polish import polish_studio_cutout
+
+    img = _rgba_shirt_with_hanger().rotate(12, expand=True, fillcolor=(0, 0, 0, 0))
+    out = polish_studio_cutout(img)
+    assert out.mode == "RGBA"
+    alpha = np.asarray(out.split()[-1])
+    assert (alpha > 127).sum() > 100
+
+
+def test_version_endpoint():
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    client = TestClient(app)
+    r = client.get("/version")
+    assert r.status_code == 200
+    body = r.json()
+    assert "commit" in body and body["commit"]
+    assert "started_at" in body and body["started_at"]
+
+
+def test_orientation_debug_writes_artifacts(tmp_path, monkeypatch):
+    """debug=True her katman icin kanit dosyasi yazar; skor mantigini degistirmez."""
+    import json
+
+    from app.services import orientation_debug as od
+
+    monkeypatch.setattr(od, "debug_root", lambda: tmp_path)
+
+    shirt = _rgba_tshirt_neckline()
+    buf = io.BytesIO()
+    shirt.save(buf, format="PNG")
+    result = garment_normalizer.normalize(
+        buf.getvalue(),
+        force_rembg=False,
+        debug=True,
+        job_id="dbgstep1",
+        drop_shadow=False,
+        long_side=256,
+    )
+    out = tmp_path / "dbgstep1"
+    for name in (
+        "1_mask_raw.png",
+        "2_mask_deskewed.png",
+        "3_candidates.png",
+        "4_rotation_applied.png",
+        "debug_strip.png",
+        "decision.json",
+    ):
+        assert (out / name).is_file(), name
+    decision = json.loads((out / "decision.json").read_text(encoding="utf-8"))
+    assert decision["job_id"] == "dbgstep1"
+    assert decision["best_edge"] in ("top", "right", "bottom", "left")
+    assert "scores" in decision
+    assert "pipeline_git_commit" in decision
+    assert result.result_filename.startswith("result_dbgstep1_")
+    assert (out / result.result_filename).is_file()
+    # debug kapaliyken dosya yazilmaz
+    other = tmp_path / "nodbg"
+    garment_normalizer.normalize(
+        buf.getvalue(),
+        force_rembg=False,
+        debug=False,
+        job_id="nodbg",
+        drop_shadow=False,
+        long_side=256,
+    )
+    assert not other.exists()
+
+
+def test_production_deskewed_tshirt_picks_neck_top():
+    """Kanıt: deskew sonrası yaka üstte; koltuk altı 'left' seçilmemeli."""
+    from pathlib import Path
+
+    from app.services.garment_polish import (
+        compute_orientation_scores,
+        detect_neckline_edge,
+        rotate_neckline_to_north,
+    )
+
+    fixture = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "orientation"
+        / "tshirt_deskewed_neck_north.png"
+    )
+    img = Image.open(fixture).convert("L")
+    alpha = np.asarray(img, dtype=np.uint8)
+    scores = compute_orientation_scores(alpha)
+    assert scores["best"] == "top"
+    assert set(scores["candidate_pair"]) == {"top", "bottom"}
+    assert scores["combined"]["top"] >= scores["combined"]["left"]
+    assert detect_neckline_edge(alpha) == "top"
+
+    rgba = Image.open(fixture).convert("RGBA")
+    # L maskeyi alfa yap
+    rgba.putalpha(img)
+    out, deg, edge, _method = rotate_neckline_to_north(rgba)
+    assert edge == "top" and deg == 0
+    assert detect_neckline_edge(np.asarray(out.split()[-1])) == "top"
+
+
+def test_orientation_signals_on_synthetic_tshirt():
+    from app.services.garment_polish import compute_orientation_scores
+
+    shirt = _rgba_tshirt_neckline()
+    scores = compute_orientation_scores(np.asarray(shirt.split()[-1]))
+    assert scores["best"] == "top"
+    top = scores["detail"]["top"]
+    left = scores["detail"]["left"]
+    assert top["centrality_score"] >= left["centrality_score"]
+    assert "depth_score" in top and "symmetry_score" in top

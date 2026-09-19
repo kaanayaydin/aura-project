@@ -1,7 +1,8 @@
 """Orientation golden-set + idempotency (CI her PR).
 
-low → deg=0 güvenlik ağı. medium/high → ensemble kenarı uygulanır.
-Sentetik 90: sızıntısız RotNet conf < 0.8, faz hatası açık. 270 medium override.
+low → deg=0 skipped_low_confidence.
+medium → deg=0 skipped_pending_confirmation (geçici köprü; UI yok).
+high → ensemble kenarı uygulanır.
 """
 
 from __future__ import annotations
@@ -36,11 +37,15 @@ def test_golden_orientation_contract(case):
         assert not low, case["id"]
         assert result.rotation_suggested == case["expected_suggested"]
         assert result.rotation_deg_applied == case["expected_deg"]
+        assert result.rotation_method != "skipped_pending_confirmation"
+        assert result.rotation_method != "skipped_low_confidence"
     elif exp == "medium":
         assert not low, case["id"]
         assert result.rotation_suggested == case["expected_suggested"]
-        assert result.rotation_deg_applied == case["expected_deg"]
+        assert result.rotation_deg_applied == 0
         assert result.ensemble_confidence == "medium"
+        assert result.rotation_method == "skipped_pending_confirmation"
+        assert result.requires_confirmation is True
     else:
         assert low, case["id"]
         assert result.rotation_deg_applied == 0
@@ -71,12 +76,15 @@ def test_phase_error_synthetic_90_rotnet_below_override():
     assert result.ensemble_confidence == "low"
 
 
-def test_phase_error_synthetic_270_resolved_by_rotnet():
+def test_phase_error_synthetic_270_medium_not_auto_applied():
+    """RotNet right doğru ama medium — köprü: 90 uygulanmaz."""
     result = _normalize("images/synthetic_uneck_r270.png")
     assert result.low_confidence is False
     assert result.ensemble_confidence == "medium"
     assert result.rotation_suggested == "right"
-    assert result.rotation_deg_applied == 90
+    assert result.rotation_deg_applied == 0
+    assert result.rotation_method == "skipped_pending_confirmation"
+    assert result.requires_confirmation is True
 
 
 def test_deskew_step_always_executes(tmp_path, monkeypatch):
@@ -132,6 +140,75 @@ def test_crewneck_shallow_notch_stays_above_depth_threshold():
     assert result.rotation_deg_applied == 0
     scores = compute_orientation_scores(np.asarray(result.cutout_rgba.split()[-1]))
     assert float(scores["max_depth_across_edges"]) >= float(settings.orient_min_absolute_depth)
+
+
+def test_medium_golden_cases_skip_pending_confirmation(tmp_path, monkeypatch):
+    """Tüm medium golden vakaları: deg=0, skipped_pending_confirmation, etiket medium."""
+    from app.services import orientation_debug as od
+
+    monkeypatch.setattr(od, "debug_root", lambda: tmp_path)
+    medium = [c for c in EXPECTED["cases"] if c["expected_confidence"] == "medium"]
+    assert medium, "golden-set'te medium vaka yok"
+    for case in medium:
+        raw = (ROOT / case["file"]).read_bytes()
+        result = garment_normalizer.normalize(
+            raw,
+            force_rembg=False,
+            drop_shadow=False,
+            long_side=256,
+            debug=True,
+            job_id=f"medskip_{case['id']}",
+        )
+        assert result.ensemble_confidence == "medium", case["id"]
+        assert result.low_confidence is False, case["id"]
+        assert result.rotation_deg_applied == 0, case["id"]
+        assert result.rotation_method == "skipped_pending_confirmation", case["id"]
+        assert result.requires_confirmation is True, case["id"]
+        decision = json.loads(
+            (tmp_path / f"medskip_{case['id']}" / "decision.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert decision["rotation_deg_applied"] == 0, case["id"]
+        assert decision["rotation_method"] == "skipped_pending_confirmation", case["id"]
+        assert decision["ensemble_confidence"] == "medium", case["id"]
+        ens = decision.get("ensemble") or {}
+        assert ens.get("final_confidence") == "medium", case["id"]
+        assert decision.get("low_confidence") is False, case["id"]
+
+
+def test_holdout_aline_dress_known_failure_stays_low(tmp_path, monkeypatch):
+    """known failure: RotNet 270 yanlış; ensemble low, 270 uygulanmaz."""
+    from app.services import orientation_debug as od
+
+    monkeypatch.setattr(od, "debug_root", lambda: tmp_path)
+    raw = (ROOT / "images/holdout_aline_dress.png").read_bytes()
+    result = garment_normalizer.normalize(
+        raw,
+        force_rembg=False,
+        drop_shadow=False,
+        long_side=256,
+        debug=True,
+        job_id="aline_known_fail",
+    )
+    assert result.low_confidence is True
+    assert result.ensemble_confidence == "low"
+    assert result.rotation_deg_applied == 0
+    assert result.requires_confirmation is True
+    decision = json.loads(
+        (tmp_path / "aline_known_fail" / "decision.json").read_text(encoding="utf-8")
+    )
+    rot = decision.get("rotnet") or {}
+    ens = decision.get("ensemble") or {}
+    geo = decision.get("geometric") or {}
+    assert rot.get("predicted_edge") == "left"
+    assert rot.get("predicted_class") == 270
+    assert float(rot.get("confidence") or 0) > 0.8
+    assert ens.get("final_confidence") == "low"
+    assert ens.get("reason") == "rotnet_override_blocked_no_notch"
+    assert float(geo.get("max_depth_across_edges") or 0) < float(
+        settings.orient_min_absolute_depth
+    )
 
 
 def test_no_false_high_confidence_without_real_notch(tmp_path, monkeypatch):

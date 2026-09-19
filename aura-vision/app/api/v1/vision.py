@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, Header, HTTPException, Query, UploadFile, status
 
 from app.core.config import settings
 from app.core.exceptions import ModelUnavailableError
@@ -44,6 +44,7 @@ async def analyze_image(
         alias="Authorization",
         description="Opsiyonel: kullanici JWT — backend sync icin iletilir",
     ),
+    debug: bool = Query(False, description="Kategori debug dosyalarini yaz"),
 ) -> AnalyzeResponse:
     raw_bytes = await file.read()
 
@@ -68,6 +69,7 @@ async def analyze_image(
             content_type=file.content_type,
             schedule=background_tasks.add_task,
             bearer_token=bearer,
+            debug=bool(debug),
         )
     except UnsupportedImageFormatError as exc:
         raise HTTPException(
@@ -87,10 +89,14 @@ async def analyze_image(
 
     categorized = sum(1 for item in result.detected_items if item.category)
     cutouts = sum(1 for item in result.detected_items if item.cutout_image_base64)
-    return AnalyzeResponse(
-        message="{0} nesne tespit edildi, {1} tanesi kategorilendirildi, {2} kesim hazir.".format(
+    if result.user_message and categorized == 0:
+        message = result.user_message
+    else:
+        message = "{0} nesne tespit edildi, {1} tanesi kategorilendirildi, {2} kesim hazir.".format(
             len(result.detected_items), categorized, cutouts
-        ),
+        )
+    return AnalyzeResponse(
+        message=message,
         pipeline_stage=result.pipeline_stage,
         stages_completed=result.stages_completed,
         detection_model=result.detection_model,
@@ -100,6 +106,10 @@ async def analyze_image(
         wardrobe_sync_queued=result.wardrobe_sync_queued,
         metadata=result.metadata,
         detected_items=result.detected_items,
+        job_id=result.job_id,
+        rejected_reason=result.rejected_reason,
+        user_message=result.user_message,
+        category_debug_dir=result.category_debug_dir,
     )
 
 
@@ -114,6 +124,7 @@ async def normalize_garment(
     aspect: Optional[str] = Form(None, description="3:4 veya 1:1"),
     background: Optional[str] = Form(None, description="Hex arka plan (#F8F9FA)"),
     drop_shadow: Optional[str] = Form(None, description="true/false/1/0"),
+    debug: bool = Query(False, description="Orientation debug dosyalarini yaz (Adim 1)"),
 ) -> NormalizeGarmentResponse:
     raw_bytes = await file.read()
     if not raw_bytes:
@@ -137,6 +148,7 @@ async def normalize_garment(
             aspect=aspect,
             background_hex=background,
             drop_shadow=shadow,
+            debug=bool(debug),
         )
     except ValueError as exc:
         logger.warning("Normalize garment validation: %s", exc)
@@ -159,4 +171,14 @@ async def normalize_garment(
         cutout_source=result.cutout_source,
         image_base64=b64,
         image_bytes=len(result.png_bytes),
+        job_id=result.job_id,
+        commit=result.commit,
+        debug_dir=result.debug_dir,
+        result_filename=result.result_filename,
+        low_confidence=result.low_confidence,
+        rotation_suggested=result.rotation_suggested,
+        rotation_deg_applied=result.rotation_deg_applied,
+        rotation_method=result.rotation_method,
+        requires_confirmation=result.requires_confirmation,
+        ensemble_confidence=result.ensemble_confidence,
     )

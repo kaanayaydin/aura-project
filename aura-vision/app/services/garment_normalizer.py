@@ -12,13 +12,16 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import uuid
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
 from PIL import Image
 
+from app.core.build_info import git_commit_short
 from app.core.config import settings
+from app.services.garment_polish import polish_studio_cutout
 from app.services.garment_studio import (
     boost_contrast,
     chroma_cutout,
@@ -42,6 +45,20 @@ class NormalizeResult:
     height: int
     cutout_source: str  # alpha | rembg | chroma
     aspect: str
+    job_id: str = ""
+    commit: str = ""
+    debug_dir: Optional[str] = None
+    result_filename: str = ""
+    low_confidence: bool = False
+    rotation_suggested: str = "top"
+    rotation_deg_applied: int = 0
+    rotation_method: str = "none"
+    requires_confirmation: bool = False
+    cutout_rgba: Optional[Image.Image] = None
+    deskew_step_executed: bool = False
+    deskew_input_angle_estimated: float = 0.0
+    deskew_skip_reason: Optional[str] = None
+    ensemble_confidence: str = ""
 
 
 def _onnxruntime_available() -> bool:
@@ -84,6 +101,8 @@ class GarmentNormalizer:
         drop_shadow: Optional[bool] = None,
         long_side: Optional[int] = None,
         force_rembg: Optional[bool] = None,
+        debug: bool = False,
+        job_id: Optional[str] = None,
     ) -> NormalizeResult:
         if not raw_bytes:
             raise ValueError("Bos gorsel")
@@ -94,6 +113,10 @@ class GarmentNormalizer:
         except Exception as exc:  # noqa: BLE001
             raise ValueError(f"Gorsel okunamadi: {exc}") from exc
 
+        job = (job_id or uuid.uuid4().hex[:12]).strip() or uuid.uuid4().hex[:12]
+        commit = git_commit_short()
+        polish_trace: dict = {}
+
         prefer_rembg = settings.studio_prefer_rembg if force_rembg is None else bool(force_rembg)
         try:
             cutout, source = self._cutout(image, prefer_rembg=prefer_rembg)
@@ -101,6 +124,24 @@ class GarmentNormalizer:
             logger.exception("Cutout basarisiz — chroma fallback")
             cutout = chroma_cutout(image.convert("RGB"))
             source = "chroma"
+
+        if settings.studio_polish_enabled:
+            try:
+                cutout = polish_studio_cutout(
+                    cutout,
+                    remove_hanger=settings.studio_remove_hanger,
+                    deskew=settings.studio_deskew,
+                    press=settings.studio_catalog_press,
+                    trace=polish_trace,
+                )
+                logger.info(
+                    "Studio polish OK (hanger=%s deskew=%s press=%s)",
+                    settings.studio_remove_hanger,
+                    settings.studio_deskew,
+                    settings.studio_catalog_press,
+                )
+            except Exception:
+                logger.exception("Studio polish basarisiz — ham cutout ile framing")
 
         aspect_key = (aspect or settings.studio_aspect or "3:4").strip()
         if aspect_key not in ("3:4", "1:1"):
@@ -119,6 +160,7 @@ class GarmentNormalizer:
         )
         if framed.mode != "RGB":
             framed = framed.convert("RGB")
+        cutout_keep = cutout.copy() if isinstance(cutout, Image.Image) else None
 
         buf = io.BytesIO()
         framed.save(buf, format="PNG", optimize=True)
@@ -134,12 +176,78 @@ class GarmentNormalizer:
         except Exception as exc:  # noqa: BLE001
             raise ValueError(f"Normalize PNG okunamadi: {exc}") from exc
 
+        result_filename = "result_{0}_{1}.png".format(job, commit)
+        debug_dir: Optional[str] = None
+        if debug:
+            try:
+                from app.services.orientation_debug import (
+                    OrientationTrace,
+                    render_candidates_overlay,
+                    write_orientation_debug,
+                )
+
+                mask_deskewed = polish_trace.get("mask_deskewed")
+                scores = polish_trace.get("scores") or {}
+                candidates = None
+                if mask_deskewed is not None:
+                    candidates = render_candidates_overlay(mask_deskewed, scores)
+                trace = OrientationTrace(
+                    job_id=job,
+                    mask_raw=polish_trace.get("mask_raw"),
+                    mask_deskewed=mask_deskewed,
+                    candidates=candidates,
+                    mask_rotated=polish_trace.get("mask_rotated"),
+                    framed=framed,
+                    scores=scores,
+                    best_edge=str(polish_trace.get("best_edge") or "top"),
+                    deskew_angle_applied=float(
+                        polish_trace.get("deskew_angle_applied") or 0.0
+                    ),
+                    deskew_step_executed=bool(
+                        polish_trace.get("deskew_step_executed")
+                    ),
+                    deskew_input_angle_estimated=polish_trace.get(
+                        "deskew_input_angle_estimated"
+                    ),
+                    deskew_skip_reason=polish_trace.get("deskew_skip_reason"),
+                    deskew_min_abs_deg=polish_trace.get("deskew_min_abs_deg"),
+                    rotation_deg_applied=int(
+                        polish_trace.get("rotation_deg_applied") or 0
+                    ),
+                    rotation_method=str(
+                        polish_trace.get("rotation_method") or "none"
+                    ),
+                    cutout_source=source,
+                    low_confidence=bool(
+                        polish_trace.get("low_confidence")
+                        or (scores or {}).get("low_confidence")
+                    ),
+                    rotation_suggested=str(
+                        polish_trace.get("rotation_suggested")
+                        or polish_trace.get("best_edge")
+                        or "top"
+                    ),
+                    requires_confirmation=bool(
+                        polish_trace.get("requires_confirmation")
+                        or polish_trace.get("low_confidence")
+                    ),
+                    ensemble_confidence=str(
+                        polish_trace.get("ensemble_confidence") or ""
+                    ),
+                )
+                debug_dir = str(write_orientation_debug(trace))
+            except Exception:
+                logger.exception("Orientation debug yazilamadi")
+
         logger.info(
-            "Normalize OK source=%s size=%sx%s png_bytes=%s",
+            "Normalize OK source=%s size=%sx%s png_bytes=%s job=%s commit=%s debug=%s",
             source,
             framed.size[0],
             framed.size[1],
             len(png),
+            job,
+            commit,
+            debug_dir,
         )
         return NormalizeResult(
             image=framed,
@@ -148,6 +256,26 @@ class GarmentNormalizer:
             height=framed.size[1],
             cutout_source=source,
             aspect=aspect_key,
+            job_id=job,
+            commit=commit,
+            debug_dir=debug_dir,
+            result_filename=result_filename,
+            low_confidence=bool(polish_trace.get("low_confidence")),
+            rotation_suggested=str(
+                polish_trace.get("rotation_suggested")
+                or polish_trace.get("best_edge")
+                or "top"
+            ),
+            rotation_deg_applied=int(polish_trace.get("rotation_deg_applied") or 0),
+            rotation_method=str(polish_trace.get("rotation_method") or "none"),
+            requires_confirmation=bool(polish_trace.get("requires_confirmation")),
+            ensemble_confidence=str(polish_trace.get("ensemble_confidence") or ""),
+            cutout_rgba=cutout_keep,
+            deskew_step_executed=bool(polish_trace.get("deskew_step_executed")),
+            deskew_input_angle_estimated=float(
+                polish_trace.get("deskew_input_angle_estimated") or 0.0
+            ),
+            deskew_skip_reason=polish_trace.get("deskew_skip_reason"),
         )
 
     def normalize_to_base64(self, raw_bytes: bytes, **kwargs) -> tuple[str, NormalizeResult]:

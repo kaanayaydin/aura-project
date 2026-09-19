@@ -159,7 +159,17 @@ def apply_orientation_ensemble(geometric: dict[str, Any], alpha: np.ndarray) -> 
         else:
             final_conf, final_edge, reason = "medium", geo_edge, "agreement_geometry_low"
     elif geo_conf == "low" and rot_conf > min_conf:
-        final_conf, final_edge, reason = "medium", rot_edge, "rotnet_override_low_geometry"
+        max_d = float(scores.get("max_depth_across_edges") or 0.0)
+        min_d = float(settings.orient_min_absolute_depth)
+        # Kanıtsız 90/270: RotNet emin olsa bile çukur yoksa uygulama (aline_dress)
+        if rot_edge in ("left", "right") and max_d < min_d:
+            final_conf, final_edge, reason = (
+                "low",
+                geo_edge,
+                "rotnet_override_blocked_no_notch",
+            )
+        else:
+            final_conf, final_edge, reason = "medium", rot_edge, "rotnet_override_low_geometry"
     else:
         final_conf, final_edge, reason = "low", geo_edge, "disagreement"
 
@@ -171,7 +181,8 @@ def apply_orientation_ensemble(geometric: dict[str, Any], alpha: np.ndarray) -> 
         "geometric_confidence": geo_conf,
     }
     scores["ensemble_confidence"] = final_conf
-    # Pipeline: medium/high uygula; low güvenlik ağı
+    # suggested kenar her zaman yazılır; otomatik uygulama yalnız high
+    # (rotate_neckline_to_north). medium/low etiketleri karışmaz.
     scores["best"] = final_edge
     scores["low_confidence"] = final_conf == "low"
     # Otomatik uygulama yalnızca iki bağımsız sinyal de güçlüyse

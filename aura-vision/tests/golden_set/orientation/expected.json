@@ -49,10 +49,11 @@
       "kind": "synthetic_phase",
       "ground_truth_neck": "right",
       "expected_suggested": "right",
-      "expected_deg": 90,
+      "expected_deg": 0,
       "expected_confidence": "medium",
+      "expected_rotation_method": "skipped_pending_confirmation",
       "phase_error_open": false,
-      "phase_error_note": "Geometri low+bottom; RotNet right 0.97 → medium+90. Yaka üste gelir."
+      "phase_error_note": "Geometri low+bottom; RotNet right 0.97 → medium. Köprü: 90 uygulanmaz (skipped_pending_confirmation). UI gelince onay."
     },
     {
       "id": "askisiz_duz_aci",
@@ -108,10 +109,11 @@
       "kind": "real_phase",
       "ground_truth_neck": "left",
       "expected_suggested": "left",
-      "expected_deg": 270,
+      "expected_deg": 0,
       "expected_confidence": "medium",
+      "expected_rotation_method": "skipped_pending_confirmation",
       "phase_error_open": false,
-      "notes": "Geometri low (depth=0.004); RotNet left ile eşleşse bile high değil — agreement_geometry_low"
+      "notes": "Köprü: medium 270 uygulanmaz. RotNet left hâlâ suggested. UI onayına kadar deg=0."
     },
     {
       "id": "real_duz_r180",
@@ -119,9 +121,11 @@
       "kind": "real_phase",
       "ground_truth_neck": "bottom",
       "expected_suggested": "bottom",
-      "expected_deg": 180,
+      "expected_deg": 0,
       "expected_confidence": "medium",
-      "phase_error_open": false
+      "expected_rotation_method": "skipped_pending_confirmation",
+      "phase_error_open": false,
+      "notes": "Köprü: medium 180 uygulanmaz. UI onayına kadar deg=0."
     },
     {
       "id": "real_duz_r270",
@@ -162,6 +166,17 @@
       "expected_deg": 0,
       "expected_confidence": "high",
       "idempotent_high": true
+    },
+    {
+      "id": "holdout_aline_dress",
+      "file": "images/holdout_aline_dress.png",
+      "kind": "holdout_synthetic",
+      "in_training": false,
+      "ground_truth_neck": "top",
+      "expected_deg": 0,
+      "expected_confidence": "low",
+      "known_failure": true,
+      "known_issue_note": "RotNet left/270 (yanlış) 0.91. known failure: low-confidence + deg=0 beklenir, 270 uygulanmaz."
     },
     {
       "id": "holdout_real_perspective",

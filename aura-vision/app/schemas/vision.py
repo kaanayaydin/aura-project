@@ -93,6 +93,13 @@ class ImageAnalysisResult(BaseModel):
         None,
         description="Arka plana alinan yazma isi sayisi; entegrasyon kapaliysa null",
     )
+    job_id: str = Field("", description="Analiz is kimligi")
+    rejected_reason: Optional[str] = Field(
+        None,
+        description="Kategori yoksa: below_threshold | cutout_failed | no_detection",
+    )
+    user_message: Optional[str] = Field(None, description="Kullaniciya gosterilecek mesaj")
+    category_debug_dir: Optional[str] = Field(None)
 
 
 class AnalyzeResponse(BaseModel):
@@ -126,6 +133,10 @@ class AnalyzeResponse(BaseModel):
         default_factory=list,
         description="Tespit edilen nesneler, guven skoruna gore azalan sirada",
     )
+    job_id: str = Field("", description="Analiz is kimligi")
+    rejected_reason: Optional[str] = Field(None)
+    user_message: Optional[str] = Field(None)
+    category_debug_dir: Optional[str] = Field(None)
 
 
 class NormalizeGarmentResponse(BaseModel):
@@ -140,3 +151,22 @@ class NormalizeGarmentResponse(BaseModel):
     content_type: str = Field("image/png")
     image_base64: str = Field(..., description="Normalize PNG (base64, data URI yok)")
     image_bytes: int = Field(..., description="PNG bayt uzunlugu")
+    job_id: str = Field("", description="Normalize is kimligi")
+    commit: str = Field("", description="Pipeline git short hash")
+    debug_dir: Optional[str] = Field(None, description="debug=true ise cikti klasoru")
+    result_filename: str = Field("", description="result_{job}_{commit}.png")
+    low_confidence: bool = Field(False, description="Yaka skoru yakin cagri")
+    rotation_suggested: str = Field("top", description="Onerilen yaka kenari")
+    rotation_deg_applied: int = Field(0, description="Uygulanan kardinal CCW derece")
+    rotation_method: str = Field(
+        "none",
+        description="cv2.ROTATE_* | skipped_low_confidence | skipped_pending_confirmation",
+    )
+    requires_confirmation: bool = Field(
+        False,
+        description="low/medium ensemble — istemci onay UI tetikleyebilir",
+    )
+    ensemble_confidence: str = Field(
+        "",
+        description="high | medium | low — geometrik+RotNet ensemble",
+    )
