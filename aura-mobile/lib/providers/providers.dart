@@ -284,6 +284,9 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
         bytes: saveBytes,
         category: best.category,
         categoryConfidence: best.confidence,
+        // High: Vision idempotentliği kanıtlanmadı; Java ikinci normalize
+        // (alreadyNormalized false). Onay yolu ayrı true gönderir.
+        alreadyNormalized: false,
         message:
             'Analiz tamam (${best.category}). Stüdyo normalize dolaba kaydedildi.',
       );
@@ -306,6 +309,7 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
       bytes: bytes,
       category: pending.category,
       categoryConfidence: pending.categoryConfidence,
+      alreadyNormalized: true,
       message: 'Yön onaylandı. Stüdyo görsel dolaba kaydedildi.',
     );
     return outcome.message;
@@ -318,6 +322,7 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
     required String category,
     required String message,
     double? categoryConfidence,
+    bool alreadyNormalized = false,
   }) async {
     _phase.setSaving(previewBytes: bytes, category: category);
     try {
@@ -325,6 +330,7 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
         category: category,
         categoryConfidence: categoryConfidence,
         imageBase64: base64Encode(bytes),
+        alreadyNormalized: alreadyNormalized,
       );
       // ignore: avoid_print
       print(

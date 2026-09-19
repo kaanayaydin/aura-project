@@ -103,6 +103,7 @@ class GarmentNormalizer:
         force_rembg: Optional[bool] = None,
         debug: bool = False,
         job_id: Optional[str] = None,
+        skip_orientation: bool = False,
     ) -> NormalizeResult:
         if not raw_bytes:
             raise ValueError("Bos gorsel")
@@ -117,7 +118,11 @@ class GarmentNormalizer:
         commit = git_commit_short()
         polish_trace: dict = {}
 
-        prefer_rembg = settings.studio_prefer_rembg if force_rembg is None else bool(force_rembg)
+        # Onaylı yükleme: rotasyonu tekrar hesaplama; rembg de silüeti yiyebilir.
+        if skip_orientation and force_rembg is None:
+            prefer_rembg = False
+        else:
+            prefer_rembg = settings.studio_prefer_rembg if force_rembg is None else bool(force_rembg)
         try:
             cutout, source = self._cutout(image, prefer_rembg=prefer_rembg)
         except Exception:
@@ -125,7 +130,14 @@ class GarmentNormalizer:
             cutout = chroma_cutout(image.convert("RGB"))
             source = "chroma"
 
-        if settings.studio_polish_enabled:
+        if skip_orientation:
+            logger.info("skip_orientation: deskew/cardinal/ensemble atlandi — yalniz 3:4 framing")
+            polish_trace["rotation_method"] = "skipped_already_normalized"
+            polish_trace["rotation_deg_applied"] = 0
+            polish_trace["requires_confirmation"] = False
+            polish_trace["deskew_step_executed"] = False
+            polish_trace["deskew_skip_reason"] = "skip_orientation"
+        elif settings.studio_polish_enabled:
             try:
                 cutout = polish_studio_cutout(
                     cutout,

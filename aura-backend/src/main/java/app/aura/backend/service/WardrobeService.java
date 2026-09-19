@@ -93,30 +93,28 @@ public class WardrobeService {
         byte[] finalBytes = sourceBytes;
         String finalMime = sourceMime;
 
-        if (request.alreadyNormalized()) {
+        boolean skipOrientation = request.alreadyNormalized();
+        Optional<byte[]> studio = visionGarmentClient.normalizeGarmentPng(
+                sourceBytes,
+                request.category() == null ? "garment.png" : request.category() + ".png",
+                skipOrientation);
+        if (studio.isPresent()) {
+            finalBytes = studio.get();
+            finalMime = Base64Images.MIME_PNG;
+            imageBytes = finalBytes.length;
             log.info(
-                    "Wardrobe studio normalize atlandi (alreadyNormalized=true): category={} bytes={}",
+                    "Wardrobe studio normalize uygulandi: category={} bytes={} mime={} skipOrientation={}",
                     request.category(),
-                    sourceBytes.length);
+                    imageBytes,
+                    finalMime,
+                    skipOrientation);
         } else {
-            Optional<byte[]> studio = visionGarmentClient.normalizeGarmentPng(
-                    sourceBytes, request.category() == null ? "garment.png" : request.category() + ".png");
-            if (studio.isPresent()) {
-                finalBytes = studio.get();
-                finalMime = Base64Images.MIME_PNG;
-                imageBytes = finalBytes.length;
-                log.info(
-                        "Wardrobe studio normalize uygulandi: category={} bytes={} mime={}",
-                        request.category(),
-                        imageBytes,
-                        finalMime);
-            } else {
-                log.info(
-                        "Wardrobe studio normalize atlandi/basarisiz: category={} sourceBytes={} mime={}",
-                        request.category(),
-                        sourceBytes.length,
-                        sourceMime);
-            }
+            log.info(
+                    "Wardrobe studio normalize atlandi/basarisiz: category={} sourceBytes={} mime={} skipOrientation={}",
+                    request.category(),
+                    sourceBytes.length,
+                    sourceMime,
+                    skipOrientation);
         }
 
         if (finalMime == null || finalMime.isBlank()) {

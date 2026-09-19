@@ -2,6 +2,12 @@ package app.aura.backend.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,24 +17,36 @@ import app.aura.backend.model.User;
 import app.aura.backend.repository.UserRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.security.JwtService;
+import app.aura.backend.service.VisionGarmentClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Base64;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * /api/v1/wardrobe — JWT kimlik (v0.17.2).
+ *
+ * {@code application-test.yml} {@code normalize-garment-enabled: false} koyar.
+ * Gercek client no-op empty doner. Bu sinif {@link MockitoBean} ile client
+ * stub'lar; alreadyNormalized=true → skipOrientation=true ile cagrilir
+ * (framing_only), false/alan-yok → skipOrientation=false.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@TestPropertySource(properties = "aura.vision.normalize-garment-enabled=true")
 class WardrobeControllerTest {
 
     private static final byte[] PNG_BYTES = {
@@ -55,6 +73,16 @@ class WardrobeControllerTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @MockitoBean
+    private VisionGarmentClient visionGarmentClient;
+
+    @BeforeEach
+    void stubVisionClient() {
+        Mockito.reset(visionGarmentClient);
+        when(visionGarmentClient.normalizeGarmentPng(any(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
+    }
 
     private String bearer(User user) {
         return "Bearer " + jwtService.issueToken(user.getId(), user.getUsername());
@@ -283,6 +311,65 @@ class WardrobeControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(user)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Dolap parcasi bulunamadi"));
+    }
+
+    @Test
+    void rawJsonAlreadyNormalizedTrue_callsNormalizeWithSkipOrientation() throws Exception {
+        User user = userRepository.save(new User(
+                "http-norm-true-" + System.nanoTime(),
+                "http-norm-true-" + System.nanoTime() + "@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "t-shirt",
+                                  "imageBase64": "%s",
+                                  "alreadyNormalized": true
+                                }
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isCreated());
+
+        verify(visionGarmentClient, times(1)).normalizeGarmentPng(any(), any(), eq(true));
+    }
+
+    @Test
+    void rawJsonAlreadyNormalizedFalse_callsNormalizeWithoutSkip() throws Exception {
+        User user = userRepository.save(new User(
+                "http-norm-false-" + System.nanoTime(),
+                "http-norm-false-" + System.nanoTime() + "@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "shirt",
+                                  "imageBase64": "%s",
+                                  "alreadyNormalized": false
+                                }
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isCreated());
+
+        verify(visionGarmentClient, times(1)).normalizeGarmentPng(any(), any(), eq(false));
+    }
+
+    @Test
+    void rawJsonMissingAlreadyNormalized_callsNormalizeWithoutSkip() throws Exception {
+        User user = userRepository.save(new User(
+                "http-norm-missing-" + System.nanoTime(),
+                "http-norm-missing-" + System.nanoTime() + "@aura.app"));
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "jacket",
+                                  "imageBase64": "%s"
+                                }
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isCreated());
+
+        verify(visionGarmentClient, times(1)).normalizeGarmentPng(any(), any(), eq(false));
     }
 
     private Long createItem(User user, String category) throws Exception {

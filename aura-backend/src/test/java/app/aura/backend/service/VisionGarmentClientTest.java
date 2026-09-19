@@ -6,11 +6,13 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import app.aura.backend.config.VisionProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.http.client.MockClientHttpRequest;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -41,6 +43,28 @@ class VisionGarmentClientTest {
         Optional<byte[]> out = client.normalizeGarmentPng(new byte[] {1, 2, 3}, "tee.png");
         assertThat(out).isPresent();
         assertThat(out.get()).startsWith(new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47});
+        server.verify();
+    }
+
+    @Test
+    void skipOrientationTrue_sendsSkipOrientationFormField() {
+        byte[] png = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        String b64 = Base64.getEncoder().encodeToString(png);
+        String json = """
+                {"status":"success","image_base64":"%s","cutout_source":"alpha","width":768,"height":1024}
+                """.formatted(b64);
+
+        server.expect(requestTo("http://vision.test/api/v1/vision/normalize-garment"))
+                .andExpect(request -> {
+                    MockClientHttpRequest mock = (MockClientHttpRequest) request;
+                    String payload = new String(mock.getBodyAsBytes(), StandardCharsets.ISO_8859_1);
+                    assertThat(payload).contains("skip_orientation");
+                    assertThat(payload).contains("true");
+                })
+                .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
+
+        Optional<byte[]> out = client.normalizeGarmentPng(new byte[] {1, 2, 3}, "tee.png", true);
+        assertThat(out).isPresent();
         server.verify();
     }
 

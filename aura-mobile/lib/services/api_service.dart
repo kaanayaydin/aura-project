@@ -400,6 +400,7 @@ class ApiService {
     String? imageUrl,
     double? categoryConfidence,
     String? color,
+    bool alreadyNormalized = false,
   }) async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/wardrobe/items');
     final body = <String, dynamic>{
@@ -408,6 +409,7 @@ class ApiService {
       'imageUrl': ?imageUrl,
       'categoryConfidence': ?categoryConfidence,
       'color': ?color,
+      'alreadyNormalized': alreadyNormalized,
     };
     final response = await _authPost(uri, body: jsonEncode(body));
     _ensureOk(response, 'Dolaba yazma basarisiz');

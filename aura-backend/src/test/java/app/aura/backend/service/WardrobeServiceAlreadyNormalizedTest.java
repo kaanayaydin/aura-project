@@ -2,9 +2,9 @@ package app.aura.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,11 +63,13 @@ class WardrobeServiceAlreadyNormalizedTest {
     }
 
     @Test
-    void alreadyNormalizedTrue_doesNotCallNormalizeGarmentPng() {
+    void alreadyNormalizedTrue_callsNormalizeWithSkipOrientation() {
         User user = userWithId(7L);
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(visionGarmentClient.normalizeGarmentPng(any(), anyString(), eq(true)))
+                .thenReturn(Optional.of(STUDIO_PNG));
         when(storageService.uploadBytes(eq(Purpose.WARDROBE), any(), anyString(), anyString()))
-                .thenReturn("http://127.0.0.1:9000/aura-wardrobe/skip.png");
+                .thenReturn("http://127.0.0.1:9000/aura-wardrobe/framed.png");
         when(wardrobeItemRepository.save(any(WardrobeItem.class))).thenAnswer(invocation -> {
             WardrobeItem item = invocation.getArgument(0);
             setId(item, 42L);
@@ -79,19 +81,20 @@ class WardrobeServiceAlreadyNormalizedTest {
 
         WardrobeItemResponse response = wardrobeService.createItem(7L, request);
 
-        verify(visionGarmentClient, never()).normalizeGarmentPng(any(), any());
+        verify(visionGarmentClient).normalizeGarmentPng(eq(SOURCE_PNG), eq("t-shirt.png"), eq(true));
         ArgumentCaptor<byte[]> uploaded = ArgumentCaptor.forClass(byte[].class);
         verify(storageService).uploadBytes(eq(Purpose.WARDROBE), uploaded.capture(), anyString(), eq("t-shirt"));
-        assertThat(uploaded.getValue()).isEqualTo(SOURCE_PNG);
-        assertThat(response.imageBytes()).isEqualTo(SOURCE_PNG.length);
-        assertThat(response.imageUrl()).contains("skip.png");
+        assertThat(uploaded.getValue()).isEqualTo(STUDIO_PNG);
+        assertThat(response.imageBytes()).isEqualTo(STUDIO_PNG.length);
+        assertThat(response.imageUrl()).contains("framed.png");
     }
 
     @Test
     void alreadyNormalizedFalse_stillCallsNormalizeGarmentPng() {
         User user = userWithId(8L);
         when(userRepository.findById(8L)).thenReturn(Optional.of(user));
-        when(visionGarmentClient.normalizeGarmentPng(any(), anyString())).thenReturn(Optional.of(STUDIO_PNG));
+        when(visionGarmentClient.normalizeGarmentPng(any(), anyString(), eq(false)))
+                .thenReturn(Optional.of(STUDIO_PNG));
         when(storageService.uploadBytes(eq(Purpose.WARDROBE), any(), anyString(), anyString()))
                 .thenReturn("http://127.0.0.1:9000/aura-wardrobe/studio.png");
         when(wardrobeItemRepository.save(any(WardrobeItem.class))).thenAnswer(invocation -> {
@@ -105,7 +108,7 @@ class WardrobeServiceAlreadyNormalizedTest {
 
         wardrobeService.createItem(8L, request);
 
-        verify(visionGarmentClient).normalizeGarmentPng(eq(SOURCE_PNG), eq("shirt.png"));
+        verify(visionGarmentClient).normalizeGarmentPng(eq(SOURCE_PNG), eq("shirt.png"), eq(false));
         ArgumentCaptor<byte[]> uploaded = ArgumentCaptor.forClass(byte[].class);
         verify(storageService).uploadBytes(eq(Purpose.WARDROBE), uploaded.capture(), anyString(), eq("shirt"));
         assertThat(uploaded.getValue()).isEqualTo(STUDIO_PNG);
@@ -124,7 +127,8 @@ class WardrobeServiceAlreadyNormalizedTest {
 
         User user = userWithId(9L);
         when(userRepository.findById(9L)).thenReturn(Optional.of(user));
-        when(visionGarmentClient.normalizeGarmentPng(any(), anyString())).thenReturn(Optional.of(STUDIO_PNG));
+        when(visionGarmentClient.normalizeGarmentPng(any(), anyString(), anyBoolean()))
+                .thenReturn(Optional.of(STUDIO_PNG));
         when(storageService.uploadBytes(eq(Purpose.WARDROBE), any(), anyString(), anyString()))
                 .thenReturn("http://127.0.0.1:9000/aura-wardrobe/legacy.png");
         when(wardrobeItemRepository.save(any(WardrobeItem.class))).thenAnswer(invocation -> {
@@ -135,7 +139,7 @@ class WardrobeServiceAlreadyNormalizedTest {
 
         wardrobeService.createItem(9L, request);
 
-        verify(visionGarmentClient).normalizeGarmentPng(any(), any());
+        verify(visionGarmentClient).normalizeGarmentPng(any(), any(), eq(false));
         ArgumentCaptor<byte[]> uploaded = ArgumentCaptor.forClass(byte[].class);
         verify(storageService).uploadBytes(eq(Purpose.WARDROBE), uploaded.capture(), anyString(), eq("jacket"));
         assertThat(uploaded.getValue()).isEqualTo(STUDIO_PNG);

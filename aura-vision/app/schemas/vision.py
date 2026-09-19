@@ -160,7 +160,10 @@ class NormalizeGarmentResponse(BaseModel):
     rotation_deg_applied: int = Field(0, description="Uygulanan kardinal CCW derece")
     rotation_method: str = Field(
         "none",
-        description="cv2.ROTATE_* | skipped_low_confidence | skipped_pending_confirmation",
+        description=(
+            "cv2.ROTATE_* | skipped_low_confidence | skipped_pending_confirmation "
+            "| skipped_already_normalized"
+        ),
     )
     requires_confirmation: bool = Field(
         False,

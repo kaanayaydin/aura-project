@@ -20,6 +20,12 @@ logger = logging.getLogger("aura.vision.api")
 router = APIRouter(prefix="/vision", tags=["Vision"])
 
 
+def _form_flag(raw: Optional[str]) -> bool:
+    if raw is None or str(raw).strip() == "":
+        return False
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -124,6 +130,14 @@ async def normalize_garment(
     aspect: Optional[str] = Form(None, description="3:4 veya 1:1"),
     background: Optional[str] = Form(None, description="Hex arka plan (#F8F9FA)"),
     drop_shadow: Optional[str] = Form(None, description="true/false/1/0"),
+    skip_orientation: Optional[str] = Form(
+        None,
+        description="true: deskew/cardinal/ensemble atla, yalniz 3:4 framing",
+    ),
+    framing_only: Optional[str] = Form(
+        None,
+        description="skip_orientation ile ayni (eski ad)",
+    ),
     debug: bool = Query(False, description="Orientation debug dosyalarini yaz (Adim 1)"),
 ) -> NormalizeGarmentResponse:
     raw_bytes = await file.read()
@@ -141,6 +155,7 @@ async def normalize_garment(
     shadow: Optional[bool] = None
     if drop_shadow is not None and str(drop_shadow).strip() != "":
         shadow = str(drop_shadow).strip().lower() in {"1", "true", "yes", "on"}
+    skip = _form_flag(skip_orientation) or _form_flag(framing_only)
 
     try:
         b64, result = garment_normalizer.normalize_to_base64(
@@ -149,6 +164,7 @@ async def normalize_garment(
             background_hex=background,
             drop_shadow=shadow,
             debug=bool(debug),
+            skip_orientation=skip,
         )
     except ValueError as exc:
         logger.warning("Normalize garment validation: %s", exc)

@@ -32,7 +32,7 @@ public record CreateWardrobeItemRequest(
 
         /**
          * true: istemci stüdyo/onay rotasyonunu zaten uyguladi; Vision
-         * normalizeGarment tekrar cagrilmaz. JSON'da yoksa Jackson {@code false}.
+         * skip_orientation (yalniz 3:4 framing) ile cagrilir. JSON yoksa false.
          */
         boolean alreadyNormalized) {
 

@@ -50,8 +50,16 @@ public class VisionGarmentClient {
 
     /**
      * Ham/cutout baytlari stüdyo PNG'ye cevirir. Basarisizsa empty.
+     *
+     * {@code skipOrientation=true}: Vision deskew/cardinal/ensemble atlar,
+     * yalniz 3:4 framing uygular (onayli rotasyonu ezmez).
      */
     public Optional<byte[]> normalizeGarmentPng(byte[] imageBytes, String filename) {
+        return normalizeGarmentPng(imageBytes, filename, false);
+    }
+
+    public Optional<byte[]> normalizeGarmentPng(
+            byte[] imageBytes, String filename, boolean skipOrientation) {
         if (!properties.normalizeGarmentEnabled()) {
             return Optional.empty();
         }
@@ -63,6 +71,7 @@ public class VisionGarmentClient {
             body.part("file", imageBytes)
                     .filename(filename == null || filename.isBlank() ? "garment.png" : filename)
                     .contentType(MediaType.APPLICATION_OCTET_STREAM);
+            body.part("skip_orientation", skipOrientation ? "true" : "false");
 
             String response = restClient.post()
                     .uri(properties.normalizeGarmentUrl())
