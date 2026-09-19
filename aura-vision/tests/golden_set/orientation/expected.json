@@ -1,0 +1,178 @@
+{
+  "notes": "chosen_edge = ensemble nihai kenar (geometrik skor ayrıca decision.json'da). ground_truth_neck = görsel yaka (piksel). MIN_ABSOLUTE_DEPTH=0.30 boşluğa dayanır (docs/golden_set_depth_distribution.md). Sentetik dosya adları r90/r270 CCW üretimidir: r90→yaka SOL, r270→yaka SAĞ.",
+  "cases": [
+    {
+      "id": "synthetic_uneck",
+      "file": "images/synthetic_uneck.png",
+      "kind": "synthetic",
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "high",
+      "idempotent_high": true
+    },
+    {
+      "id": "synthetic_crewneck",
+      "file": "images/synthetic_crewneck.png",
+      "kind": "synthetic",
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "high",
+      "neck_style": "crew",
+      "idempotent_high": true,
+      "notes": "Sığ bisiklet yaka FN-risk: max_depth=0.431 > 0.30; doğru kenar top"
+    },
+    {
+      "id": "synthetic_uneck_r90",
+      "file": "images/synthetic_uneck_r90.png",
+      "kind": "synthetic_phase",
+      "ground_truth_neck": "left",
+      "expected_deg": 0,
+      "expected_confidence": "low",
+      "phase_error_open": true,
+      "phase_error_note": "Sızıntı kapatıldıktan sonra RotNet left 0.796 < 0.8 override eşiği; ensemble disagreement → low+deg=0. Geometri hâlâ bottom."
+    },
+    {
+      "id": "synthetic_uneck_r180",
+      "file": "images/synthetic_uneck_r180.png",
+      "kind": "synthetic",
+      "ground_truth_neck": "bottom",
+      "expected_suggested": "bottom",
+      "expected_deg": 180,
+      "expected_confidence": "high",
+      "idempotent_high": true
+    },
+    {
+      "id": "synthetic_uneck_r270",
+      "file": "images/synthetic_uneck_r270.png",
+      "kind": "synthetic_phase",
+      "ground_truth_neck": "right",
+      "expected_suggested": "right",
+      "expected_deg": 90,
+      "expected_confidence": "medium",
+      "phase_error_open": false,
+      "phase_error_note": "Geometri low+bottom; RotNet right 0.97 → medium+90. Yaka üste gelir."
+    },
+    {
+      "id": "askisiz_duz_aci",
+      "file": "images/askisiz_duz_aci.png",
+      "kind": "real",
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "medium",
+      "neck_style": "crew"
+    },
+    {
+      "id": "askisiz_perspektif_golge",
+      "file": "images/askisiz_perspektif_golge.png",
+      "kind": "real",
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "medium"
+    },
+    {
+      "id": "askili_yaka_yukarida_duz",
+      "file": "images/askili_yaka_yukarida_duz.png",
+      "kind": "real",
+      "ground_truth_neck": "top",
+      "expected_deg": 0,
+      "expected_confidence": "low"
+    },
+    {
+      "id": "askisiz_arka_yuz",
+      "file": "images/askisiz_arka_yuz.png",
+      "kind": "real",
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "medium"
+    },
+    {
+      "id": "askisiz_hafif_saga",
+      "file": "images/askisiz_hafif_saga.png",
+      "kind": "real",
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "medium",
+      "decision_note": "no_edge_shows_real_notch_depth",
+      "known_bad_rotation": false,
+      "known_issue_note": "Geometri hâlâ depth kapısı (0.285<0.30, left). RotNet top 0.99 → medium, deg=0. Eski false-high+270 uygulanmaz."
+    },
+    {
+      "id": "real_duz_r90",
+      "file": "images/real_duz_r90.png",
+      "kind": "real_phase",
+      "ground_truth_neck": "left",
+      "expected_suggested": "left",
+      "expected_deg": 270,
+      "expected_confidence": "medium",
+      "phase_error_open": false,
+      "notes": "Geometri low (depth=0.004); RotNet left ile eşleşse bile high değil — agreement_geometry_low"
+    },
+    {
+      "id": "real_duz_r180",
+      "file": "images/real_duz_r180.png",
+      "kind": "real_phase",
+      "ground_truth_neck": "bottom",
+      "expected_suggested": "bottom",
+      "expected_deg": 180,
+      "expected_confidence": "medium",
+      "phase_error_open": false
+    },
+    {
+      "id": "real_duz_r270",
+      "file": "images/real_duz_r270.png",
+      "kind": "real_phase",
+      "ground_truth_neck": "right",
+      "expected_deg": 0,
+      "expected_confidence": "low",
+      "phase_error_open": true,
+      "phase_error_note": "Sızıntı kapatıldıktan sonra RotNet bottom 0.66 (yanlış), geo top low → disagreement. Güvenlik ağı deg=0."
+    },
+    {
+      "id": "holdout_hoodie",
+      "file": "images/holdout_hoodie.png",
+      "kind": "holdout_synthetic",
+      "in_training": false,
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "medium"
+    },
+    {
+      "id": "holdout_longsleeve",
+      "file": "images/holdout_longsleeve.png",
+      "kind": "holdout_synthetic",
+      "in_training": false,
+      "ground_truth_neck": "top",
+      "expected_deg": 0,
+      "expected_confidence": "low"
+    },
+    {
+      "id": "holdout_polo",
+      "file": "images/holdout_polo.png",
+      "kind": "holdout_synthetic",
+      "in_training": false,
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "high",
+      "idempotent_high": true
+    },
+    {
+      "id": "holdout_real_perspective",
+      "file": "images/holdout_real_perspective.png",
+      "kind": "holdout_real",
+      "in_training": false,
+      "ground_truth_neck": "top",
+      "expected_suggested": "top",
+      "expected_deg": 0,
+      "expected_confidence": "medium",
+      "notes": "Yaprak gölgeli gerçek tişört; eğitimde yok. Perspektif kapsam dışı; RotNet top override, deg=0."
+    }
+  ]
+}
