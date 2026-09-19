@@ -8,9 +8,10 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
 dist/
+# downloads/: distutils cache + dump dirs. Intentional everywhere —
+# a nested downloads/ is never source we want committed.
 downloads/
 eggs/
 .eggs/
@@ -18,9 +19,11 @@ eggs/
 # Unanchored `lib/` also matched Flutter `aura-mobile/lib/` and hid Dart sources.
 /lib/
 /lib64/
-parts/
+# setuptools/buildout artifact at repo root only (same class as /lib/).
+/parts/
 sdist/
-var/
+# setuptools var/ at repo root only — lib/var/ would be legitimate source.
+/var/
 wheels/
 share/python-wheels/
 *.egg-info/
@@ -50,10 +53,15 @@ checkpoints/
 /models/
 aura-vision/models/
 aura-vton/models/
+# User/pipeline blobs. Intentional everywhere: nested uploads/outputs/results
+# are never Dart/Java source we want committed.
 uploads/
 outputs/
 results/
-data/
+# Generic name — root + known dataset dirs only. Do not hide lib/data/.
+/data/
+aura-vision/data/
+aura-vton/data/
 *.log
 
 # Operating System & IDE artifacts
@@ -72,6 +80,8 @@ Thumbs.db
 **/debug_output/
 
 # Build artifacts
+# build/: intentional everywhere (Flutter, Maven, Python). Nested lib/build/
+# is never source; unanchored on purpose.
 **/target/
 build/
 dist/
