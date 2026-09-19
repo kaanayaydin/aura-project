@@ -45,7 +45,7 @@ def _env_bool(key: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class Settings:
     project_name: str = "Aura Vision Service"
-    version: str = "0.20.1"
+    version: str = "0.21.1"
     api_v1_prefix: str = "/api/v1"
 
     # Yuklenebilecek maksimum gorsel boyutu (MB)
@@ -113,15 +113,45 @@ class Settings:
     # Kapatildiginda istek icinde senkron yazilir (test/hata ayiklama icin).
     backend_sync_background: bool = _env_bool("AURA_BACKEND_SYNC_BACKGROUND", True)
 
-    # --- Garment Studio Normalizer (v0.20.1) ---
+    # --- Garment Studio Normalizer (v0.20.2) ---
     studio_aspect: str = os.getenv("AURA_STUDIO_ASPECT", "3:4")  # 3:4 | 1:1
     studio_long_side: int = _env_int("AURA_STUDIO_LONG_SIDE", 1024)
     studio_background_hex: str = os.getenv("AURA_STUDIO_BG", "#F8F9FA")
     studio_margin_ratio: float = _env_float("AURA_STUDIO_MARGIN", 0.08)
     studio_drop_shadow: bool = _env_bool("AURA_STUDIO_DROP_SHADOW", True)
-    studio_rembg_enabled: bool = _env_bool("AURA_STUDIO_REMBG", True)
-    # true: anlamli alfa olsa bile once rembg dene (katalog kalitesi)
+    studio_rembg_enabled: bool = _env_bool("AURA_STUDIO_REMBG", False)
+    # Varsayılan KAPALI: golden-set chroma/alpha hattında kilitli.
+    # Üretim kalitesi için AURA_STUDIO_REMBG=true (pytest conftest bunu ezmez).
+    # true: anlamli alfa olsa bile once rembg dene (yalnizca rembg aciksa)
     studio_prefer_rembg: bool = _env_bool("AURA_STUDIO_PREFER_REMBG", True)
+    # Cutout sonrasi: aski temizligi + deskew + bilateral utuleme
+    studio_polish_enabled: bool = _env_bool("AURA_STUDIO_POLISH", True)
+    studio_remove_hanger: bool = _env_bool("AURA_STUDIO_REMOVE_HANGER", True)
+    studio_deskew: bool = _env_bool("AURA_STUDIO_DESKEW", True)
+    studio_catalog_press: bool = _env_bool("AURA_STUDIO_CATALOG_PRESS", True)
+    # Orientation debug ciktilari (Adim 1). Varsayilan: aura-vision/debug_output
+    studio_debug_dir: str = os.getenv(
+        "AURA_DEBUG_OUTPUT_DIR",
+        str(BASE_DIR / "debug_output"),
+    )
+    # Adim 2: yaka skoru agirliklari (golden-set grid-search ile ince ayar)
+    orient_w_depth: float = _env_float("AURA_ORIENT_W_DEPTH", 0.4)
+    orient_w_symmetry: float = _env_float("AURA_ORIENT_W_SYMMETRY", 0.3)
+    orient_w_centrality: float = _env_float("AURA_ORIENT_W_CENTRALITY", 0.3)
+    orient_low_confidence_gap: float = _env_float("AURA_ORIENT_LOW_CONF_GAP", 0.15)
+    # Sahte-yaka: hicbir kenarda gercek cukur yoksa (max depth bu esigin alti) low zorla.
+    # 0.30: tek negatif örnek hafif_saga=0.285. Golden büyüdükçe doğrulanacak.
+    # docs/golden_set_depth_distribution.md
+    orient_min_absolute_depth: float = _env_float("AURA_ORIENT_MIN_ABS_DEPTH", 0.30)
+    # RotNet ensemble (geometrik skoru DEGISTIRMEZ; yanina ikinci sinyal)
+    rotnet_enabled: bool = _env_bool("AURA_ROTNET_ENABLED", True)
+    rotnet_onnx_path: str = os.getenv(
+        "AURA_ROTNET_ONNX",
+        str(BASE_DIR / "app" / "models" / "weights" / "rotnet_v1.onnx"),
+    )
+    rotnet_input_size: int = _env_int("AURA_ROTNET_INPUT_SIZE", 64)
+    rotnet_min_confidence: float = _env_float("AURA_ROTNET_MIN_CONF", 0.80)
+    studio_deskew_min_abs_deg: float = _env_float("AURA_STUDIO_DESKEW_MIN_ABS_DEG", 0.5)
 
     @property
     def max_upload_size_bytes(self) -> int:
