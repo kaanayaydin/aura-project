@@ -1,0 +1,21 @@
+{
+  "before": {
+    "note": "örnek-seviyesinde rastgele split + golden kaynak; Claude Code 1-NN",
+    "exact_match_rate": 1.0,
+    "median_diff": 0.0,
+    "1nn_accuracy": 0.932
+  },
+  "after": {
+    "train_n": 400,
+    "val_n": 80,
+    "exact_match_count": 0,
+    "exact_match_rate": 0.0,
+    "min_diff": 0.02124,
+    "median_diff": 0.04248,
+    "mean_diff": 0.042444,
+    "max_diff": 0.069092,
+    "val_sources": ["syn_u_c", "syn_u_d"],
+    "golden_set_in_training": false,
+    "split_unit": "source_mask"
+  }
+}
