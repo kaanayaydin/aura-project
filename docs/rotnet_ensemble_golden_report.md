@@ -1,10 +1,13 @@
 # RotNet ensemble — golden-set (HEAD)
 
 **Son güncelleme:** 2026-09-19 (UTC+3).  
-**Commit:** `a95b737` (`git rev-parse --short HEAD` bu koşuda).  
+**Davranış ölçümü HEAD:** `8ac04bb` (`git rev-parse --short HEAD` bu yazım anında).  
+Bu dosyayı içeren git commit farklı bir hash üretecek; doküman kendi
+commit'ini içeremez. Tablolar ve ek JSON'lar `8ac04bb` ağacında
+`dump_golden_orientation_report.py` ile üretildi.  
 **Nasıl üretildi:** `aura-vision/scripts/dump_golden_orientation_report.py` — her vaka
-`garment_normalizer.normalize(..., force_rembg=False, debug=True)`. Sayılar bu
-dosyadan veya eski rapordan kopyalanmadı. Ham `decision.json`:
+`garment_normalizer.normalize(..., force_rembg=False, debug=True)`. Sayılar eski
+rapordan kopyalanmadı. Tam ham dosyalar ayrıca
 `aura-vision/debug_output/_golden_report_head/<id>/decision.json` (gitignore).
 
 Önceki sürüm (v0.21.0 tablosu: `real_duz_r90` high/270°, `real_duz_r270`
@@ -135,23 +138,151 @@ Yeniden üret: `cd aura-vision && PYTHONPATH=. python scripts/dump_golden_orient
 
 ---
 
-## Ek: ham `decision.json` (ilk / sorunlu / known-failure)
+## Ek: ham `decision.json` (tam dosya, seçilmemiş)
 
-Kopya değil; 2026-09-19T13:03Z, commit `a95b737`.
+Kronolojik ilk sorunlu / son sorunlu / known-failure. Aşağıdaki bloklar
+`debug_output/_golden_report_head/<id>/decision.json` dosyalarının **birebir
+kopyasıdır** (`scores` ve tüm üst-seviye alanlar dahil). Koşu: HEAD `8ac04bb`.
 
 ### `real_duz_r90` (eski tabloda high/270 idi)
 
 ```json
 {
   "job_id": "real_duz_r90",
+  "best_edge": "left",
+  "scores": {
+    "best": "left",
+    "combined": {
+      "top": 0.267,
+      "right": 0.16,
+      "bottom": 0.251,
+      "left": 0.272
+    },
+    "net_neck_minus_hem": {
+      "top": -4.182,
+      "right": -1.739,
+      "bottom": 1.896,
+      "left": -2.559
+    },
+    "rot90_upright": {
+      "top": -9.935,
+      "right": 3.209,
+      "bottom": 11.151,
+      "left": -2.057
+    },
+    "detail": {
+      "top": {
+        "neck": 0.121,
+        "hem": 5.062,
+        "notch": -0.037,
+        "flatness": 0.675,
+        "tip_center": 0.939,
+        "tip_side": 0.721,
+        "depth_score": 0.0,
+        "symmetry_score": 0.891,
+        "centrality_score": 0.0,
+        "total": 0.267
+      },
+      "right": {
+        "neck": 0.416,
+        "hem": 2.536,
+        "notch": -1.847,
+        "flatness": 0.0,
+        "tip_center": 0.792,
+        "tip_side": 0.464,
+        "depth_score": 0.0,
+        "symmetry_score": 0.533,
+        "centrality_score": 0.0,
+        "total": 0.16
+      },
+      "bottom": {
+        "neck": 2.256,
+        "hem": 0.424,
+        "notch": 0.015,
+        "flatness": 0.089,
+        "tip_center": 0.026,
+        "tip_side": 0.123,
+        "depth_score": 0.004,
+        "symmetry_score": 0.833,
+        "centrality_score": 0.0,
+        "total": 0.251
+      },
+      "left": {
+        "neck": 0.616,
+        "hem": 3.735,
+        "notch": -0.372,
+        "flatness": 0.654,
+        "tip_center": 0.692,
+        "tip_side": 0.144,
+        "depth_score": 0.0,
+        "symmetry_score": 0.594,
+        "centrality_score": 0.312,
+        "total": 0.272
+      }
+    },
+    "candidate_pair": [
+      "left",
+      "right"
+    ],
+    "score_gap": 0.112,
+    "low_confidence": false,
+    "max_depth_across_edges": 0.004,
+    "min_absolute_depth": 0.3,
+    "decision_note": "no_edge_shows_real_notch_depth",
+    "index": {
+      "0": "top",
+      "1": "right",
+      "2": "bottom",
+      "3": "left"
+    },
+    "geometric": {
+      "chosen_edge": "left",
+      "confidence": "low",
+      "low_confidence": true,
+      "score_gap": 0.112,
+      "max_depth_across_edges": 0.004,
+      "decision_note": "no_edge_shows_real_notch_depth"
+    },
+    "rotnet": {
+      "predicted_class": 270,
+      "predicted_edge": "left",
+      "confidence": 0.8734,
+      "probs": {
+        "0": 0.0568,
+        "90": 0.0036,
+        "180": 0.0662,
+        "270": 0.8734
+      },
+      "available": true
+    },
+    "ensemble": {
+      "final_confidence": "medium",
+      "final_edge": "left",
+      "reason": "agreement_geometry_low",
+      "rotnet_confidence": 0.8734,
+      "geometric_confidence": "low"
+    },
+    "ensemble_confidence": "medium",
+    "requires_confirmation": true
+  },
+  "deskew_step_executed": true,
+  "deskew_input_angle_estimated": 0.0,
+  "deskew_angle_applied": 0.0,
+  "deskew_skip_reason": "angle_below_min_threshold",
+  "deskew_min_abs_deg": 0.5,
   "rotation_deg_applied": 0,
   "rotation_method": "skipped_pending_confirmation",
   "rotation_suggested": "left",
   "requires_confirmation": true,
   "low_confidence": false,
-  "pipeline_git_commit": "a95b737",
-  "timestamp": "2026-09-19T13:03:20.713092+00:00",
+  "candidate_pair": [
+    "left",
+    "right"
+  ],
+  "pipeline_git_commit": "8ac04bb",
+  "timestamp": "2026-09-19T13:24:30.544468+00:00",
   "cutout_source": "chroma",
+  "result_filename": "result_real_duz_r90_8ac04bb.png",
   "ensemble": {
     "final_confidence": "medium",
     "final_edge": "left",
@@ -163,7 +294,12 @@ Kopya değil; 2026-09-19T13:03Z, commit `a95b737`.
     "predicted_class": 270,
     "predicted_edge": "left",
     "confidence": 0.8734,
-    "probs": {"0": 0.0568, "90": 0.0036, "180": 0.0662, "270": 0.8734},
+    "probs": {
+      "0": 0.0568,
+      "90": 0.0036,
+      "180": 0.0662,
+      "270": 0.8734
+    },
     "available": true
   },
   "geometric": {
@@ -183,14 +319,140 @@ Kopya değil; 2026-09-19T13:03Z, commit `a95b737`.
 ```json
 {
   "job_id": "real_duz_r270",
+  "best_edge": "top",
+  "scores": {
+    "best": "top",
+    "combined": {
+      "top": 0.294,
+      "right": 0.224,
+      "bottom": 0.231,
+      "left": 0.179
+    },
+    "net_neck_minus_hem": {
+      "top": -3.452,
+      "right": -2.572,
+      "bottom": 1.335,
+      "left": -2.156
+    },
+    "rot90_upright": {
+      "top": -8.164,
+      "right": -1.223,
+      "bottom": 9.407,
+      "left": 2.334
+    },
+    "detail": {
+      "top": {
+        "neck": 0.244,
+        "hem": 4.348,
+        "notch": 0.03,
+        "flatness": 0.503,
+        "tip_center": 0.913,
+        "tip_side": 0.721,
+        "depth_score": 0.012,
+        "symmetry_score": 0.963,
+        "centrality_score": 0.0,
+        "total": 0.294
+      },
+      "right": {
+        "neck": 0.6,
+        "hem": 3.732,
+        "notch": -0.306,
+        "flatness": 0.647,
+        "tip_center": 0.7,
+        "tip_side": 0.143,
+        "depth_score": 0.0,
+        "symmetry_score": 0.748,
+        "centrality_score": 0.0,
+        "total": 0.224
+      },
+      "bottom": {
+        "neck": 2.083,
+        "hem": 0.879,
+        "notch": -0.038,
+        "flatness": 0.303,
+        "tip_center": 0.0,
+        "tip_side": 0.048,
+        "depth_score": 0.0,
+        "symmetry_score": 0.771,
+        "centrality_score": 0.0,
+        "total": 0.231
+      },
+      "left": {
+        "neck": 0.16,
+        "hem": 2.724,
+        "notch": -1.493,
+        "flatness": 0.0,
+        "tip_center": 0.92,
+        "tip_side": 0.354,
+        "depth_score": 0.0,
+        "symmetry_score": 0.596,
+        "centrality_score": 0.0,
+        "total": 0.179
+      }
+    },
+    "candidate_pair": [
+      "top",
+      "bottom"
+    ],
+    "score_gap": 0.062,
+    "low_confidence": true,
+    "max_depth_across_edges": 0.012,
+    "min_absolute_depth": 0.3,
+    "decision_note": "no_edge_shows_real_notch_depth",
+    "index": {
+      "0": "top",
+      "1": "right",
+      "2": "bottom",
+      "3": "left"
+    },
+    "geometric": {
+      "chosen_edge": "top",
+      "confidence": "low",
+      "low_confidence": true,
+      "score_gap": 0.062,
+      "max_depth_across_edges": 0.012,
+      "decision_note": "no_edge_shows_real_notch_depth"
+    },
+    "rotnet": {
+      "predicted_class": 180,
+      "predicted_edge": "bottom",
+      "confidence": 0.6598,
+      "probs": {
+        "0": 0.0466,
+        "90": 0.2916,
+        "180": 0.6598,
+        "270": 0.0019
+      },
+      "available": true
+    },
+    "ensemble": {
+      "final_confidence": "low",
+      "final_edge": "top",
+      "reason": "disagreement",
+      "rotnet_confidence": 0.6598,
+      "geometric_confidence": "low"
+    },
+    "ensemble_confidence": "low",
+    "requires_confirmation": true
+  },
+  "deskew_step_executed": true,
+  "deskew_input_angle_estimated": 0.0,
+  "deskew_angle_applied": 0.0,
+  "deskew_skip_reason": "angle_below_min_threshold",
+  "deskew_min_abs_deg": 0.5,
   "rotation_deg_applied": 0,
   "rotation_method": "skipped_low_confidence",
   "rotation_suggested": "top",
   "requires_confirmation": true,
   "low_confidence": true,
-  "pipeline_git_commit": "a95b737",
-  "timestamp": "2026-09-19T13:03:21.589444+00:00",
+  "candidate_pair": [
+    "top",
+    "bottom"
+  ],
+  "pipeline_git_commit": "8ac04bb",
+  "timestamp": "2026-09-19T13:24:31.518774+00:00",
   "cutout_source": "chroma",
+  "result_filename": "result_real_duz_r270_8ac04bb.png",
   "ensemble": {
     "final_confidence": "low",
     "final_edge": "top",
@@ -202,7 +464,12 @@ Kopya değil; 2026-09-19T13:03Z, commit `a95b737`.
     "predicted_class": 180,
     "predicted_edge": "bottom",
     "confidence": 0.6598,
-    "probs": {"0": 0.0466, "90": 0.2916, "180": 0.6598, "270": 0.0019},
+    "probs": {
+      "0": 0.0466,
+      "90": 0.2916,
+      "180": 0.6598,
+      "270": 0.0019
+    },
     "available": true
   },
   "geometric": {
@@ -222,14 +489,140 @@ Kopya değil; 2026-09-19T13:03Z, commit `a95b737`.
 ```json
 {
   "job_id": "holdout_aline_dress",
+  "best_edge": "top",
+  "scores": {
+    "best": "top",
+    "combined": {
+      "top": 0.3,
+      "right": 0.147,
+      "bottom": 0.3,
+      "left": 0.147
+    },
+    "net_neck_minus_hem": {
+      "top": -1.963,
+      "right": 1.642,
+      "bottom": -5.447,
+      "left": 1.642
+    },
+    "rot90_upright": {
+      "top": 4.656,
+      "right": 0.604,
+      "bottom": -3.576,
+      "left": 0.603
+    },
+    "detail": {
+      "top": {
+        "neck": 0.079,
+        "hem": 2.402,
+        "notch": -3.469,
+        "flatness": 0.0,
+        "tip_center": 0.961,
+        "tip_side": 0.0,
+        "depth_score": 0.0,
+        "symmetry_score": 1.0,
+        "centrality_score": 0.0,
+        "total": 0.3
+      },
+      "right": {
+        "neck": 2.63,
+        "hem": 1.163,
+        "notch": 0.0,
+        "flatness": 0.331,
+        "tip_center": 0.0,
+        "tip_side": 0.344,
+        "depth_score": 0.0,
+        "symmetry_score": 0.49,
+        "centrality_score": 0.0,
+        "total": 0.147
+      },
+      "bottom": {
+        "neck": 0.0,
+        "hem": 6.408,
+        "notch": 0.0,
+        "flatness": 0.996,
+        "tip_center": 1.0,
+        "tip_side": 0.933,
+        "depth_score": 0.0,
+        "symmetry_score": 1.0,
+        "centrality_score": 0.0,
+        "total": 0.3
+      },
+      "left": {
+        "neck": 2.63,
+        "hem": 1.163,
+        "notch": 0.0,
+        "flatness": 0.331,
+        "tip_center": 0.0,
+        "tip_side": 0.344,
+        "depth_score": 0.0,
+        "symmetry_score": 0.49,
+        "centrality_score": 0.0,
+        "total": 0.147
+      }
+    },
+    "candidate_pair": [
+      "top",
+      "bottom"
+    ],
+    "score_gap": 0.0,
+    "low_confidence": true,
+    "max_depth_across_edges": 0.0,
+    "min_absolute_depth": 0.3,
+    "decision_note": "no_edge_shows_real_notch_depth",
+    "index": {
+      "0": "top",
+      "1": "right",
+      "2": "bottom",
+      "3": "left"
+    },
+    "geometric": {
+      "chosen_edge": "top",
+      "confidence": "low",
+      "low_confidence": true,
+      "score_gap": 0.0,
+      "max_depth_across_edges": 0.0,
+      "decision_note": "no_edge_shows_real_notch_depth"
+    },
+    "rotnet": {
+      "predicted_class": 270,
+      "predicted_edge": "left",
+      "confidence": 0.9095,
+      "probs": {
+        "0": 0.0259,
+        "90": 0.0547,
+        "180": 0.0099,
+        "270": 0.9095
+      },
+      "available": true
+    },
+    "ensemble": {
+      "final_confidence": "low",
+      "final_edge": "top",
+      "reason": "rotnet_override_blocked_no_notch",
+      "rotnet_confidence": 0.9095,
+      "geometric_confidence": "low"
+    },
+    "ensemble_confidence": "low",
+    "requires_confirmation": true
+  },
+  "deskew_step_executed": true,
+  "deskew_input_angle_estimated": 0.0,
+  "deskew_angle_applied": 0.0,
+  "deskew_skip_reason": "angle_below_min_threshold",
+  "deskew_min_abs_deg": 0.5,
   "rotation_deg_applied": 0,
   "rotation_method": "skipped_low_confidence",
   "rotation_suggested": "top",
   "requires_confirmation": true,
   "low_confidence": true,
-  "pipeline_git_commit": "a95b737",
-  "timestamp": "2026-09-19T13:03:21.753850+00:00",
+  "candidate_pair": [
+    "top",
+    "bottom"
+  ],
+  "pipeline_git_commit": "8ac04bb",
+  "timestamp": "2026-09-19T13:24:31.682202+00:00",
   "cutout_source": "alpha",
+  "result_filename": "result_holdout_aline_dress_8ac04bb.png",
   "ensemble": {
     "final_confidence": "low",
     "final_edge": "top",
@@ -241,7 +634,12 @@ Kopya değil; 2026-09-19T13:03Z, commit `a95b737`.
     "predicted_class": 270,
     "predicted_edge": "left",
     "confidence": 0.9095,
-    "probs": {"0": 0.0259, "90": 0.0547, "180": 0.0099, "270": 0.9095},
+    "probs": {
+      "0": 0.0259,
+      "90": 0.0547,
+      "180": 0.0099,
+      "270": 0.9095
+    },
     "available": true
   },
   "geometric": {
