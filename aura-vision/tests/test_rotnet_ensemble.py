@@ -56,6 +56,29 @@ def test_ensemble_agreement_is_high(monkeypatch):
     assert out["geometric"]["chosen_edge"] == "top"
 
 
+def test_ensemble_rotnet_90_270_blocked_without_notch(monkeypatch):
+    """aline_dress: RotNet 270 emin olsa bile çukur yoksa override yok → low."""
+    monkeypatch.setattr(
+        ri,
+        "infer_rotnet",
+        lambda _a: {
+            "predicted_class": 270,
+            "predicted_edge": "left",
+            "confidence": 0.91,
+            "probs": {},
+            "available": True,
+        },
+    )
+    out = ri.apply_orientation_ensemble(
+        _geo("top", True, depth=0.0), __import__("numpy").zeros((8, 8))
+    )
+    assert out["ensemble"]["reason"] == "rotnet_override_blocked_no_notch"
+    assert out["ensemble"]["final_confidence"] == "low"
+    assert out["best"] == "top"
+    assert out["low_confidence"] is True
+    assert out["requires_confirmation"] is True
+
+
 def test_ensemble_rotnet_override_medium(monkeypatch):
     monkeypatch.setattr(
         ri,

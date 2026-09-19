@@ -10,12 +10,18 @@
     "val_n": 80,
     "exact_match_count": 0,
     "exact_match_rate": 0.0,
+    "knn1_classification_accuracy": 1.0,
+    "knn1_correct": 80,
+    "knn1_same_source_neighbor_count": 0,
+    "knn1_same_source_rate": 0.0,
     "min_diff": 0.02124,
     "median_diff": 0.04248,
     "mean_diff": 0.042444,
     "max_diff": 0.069092,
+    "chance": 0.25,
     "val_sources": ["syn_u_c", "syn_u_d"],
     "golden_set_in_training": false,
-    "split_unit": "source_mask"
+    "split_unit": "source_mask",
+    "note": "Piksel kopya kapandı (exact=0, same-source NN=0). 1-NN sınıf doğruluğu 0.932→1.0 DÜŞMEDİ: val kaynakları aynı sentetik T ailesi; rotasyon sınıfı siluetten 1-NN ile çözülüyor. Kimlik sızıntısı ≠ sınıf-korelasyonlu yakın kopya."
   }
 }

@@ -11,6 +11,7 @@ atlanir ve hangi asamalarin calistigi `stages_completed` ile bildirilir.
 """
 
 import logging
+import uuid
 from io import BytesIO
 from typing import Callable, List, Optional, Tuple
 
@@ -19,13 +20,15 @@ from PIL import Image, UnidentifiedImageError
 from app.core.config import settings
 from app.core.exceptions import ModelUnavailableError
 from app.schemas.vision import (
+    BoundingBox,
+    DetectedItem,
     ImageAnalysisResult,
     ImageMetadata,
     SegmentationInfo,
 )
 from app.services.object_detector import ObjectDetector, object_detector
 from app.services.segmenter import SegmentResult, Segmenter, segmenter
-from app.services.style_classifier import StyleClassifier, style_classifier
+from app.services.style_classifier import ClassificationResult, StyleClassifier, style_classifier
 from app.services.wardrobe_sync import (
     SyncEntry,
     WardrobeSyncClient,
@@ -41,6 +44,15 @@ STAGE_SEGMENTATION = "segmentation"
 STAGE_CLASSIFICATION = "classification"
 STAGE_BACKEND_SYNC = "backend_sync"
 STAGE_BACKEND_SYNC_SCHEDULED = "backend_sync_scheduled"
+STAGE_FULLFRAME_FALLBACK = "fullframe_fallback"
+
+USER_MSG_BELOW_THRESHOLD = (
+    "Bu fotoğrafta kıyafeti net olarak tanıyamadık, lütfen daha düz bir açıdan, gölgesiz çekin"
+)
+USER_MSG_CUTOUT_FAILED = (
+    "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin"
+)
+USER_MSG_NO_DETECTION = USER_MSG_BELOW_THRESHOLD
 
 # Yazma isini arka plana almak icin kullanilan zamanlayici imzasi:
 # schedule(fn, *args) -> None  (FastAPI'de BackgroundTasks.add_task)
@@ -75,6 +87,8 @@ class ImageAnalyzer:
         content_type: Optional[str] = None,
         schedule: Optional[Scheduler] = None,
         bearer_token: Optional[str] = None,
+        debug: bool = False,
+        job_id: Optional[str] = None,
     ) -> ImageAnalysisResult:
         """Ham byte'lardan metadata, tespit, kesim ve kategori uretir.
 
@@ -101,11 +115,84 @@ class ImageAnalyzer:
                 )
                 stages = [STAGE_METADATA]
 
+                job = (job_id or uuid.uuid4().hex[:12]).strip()
+                rejected_reason: Optional[str] = None
+                rejected_early: Optional[str] = None
                 detected_items = self._detector.detect(image)
                 stages.append(STAGE_DETECTION)
+                yolo_count = len(detected_items)
+                fallback_used = False
+                cutout_source = "none"
+                clip_row: Optional[ClassificationResult] = None
+                fallback_cut: Optional[Image.Image] = None
+                cutouts: List[Optional[SegmentResult]] = []
 
-                cutouts = self._run_segmentation(image, detected_items, stages)
-                detected_items = self._run_classification(detected_items, cutouts, stages)
+                if not detected_items:
+                    logger.warning(
+                        "YOLO 0 tespit — tam kare garment fallback (COCO kiyafet sinifi yok)"
+                    )
+                    fb_item, fb_cut, fb_src, fb_reason, clip_row = self._fullframe_garment_fallback(
+                        image
+                    )
+                    fallback_used = True
+                    cutout_source = fb_src
+                    fallback_cut = fb_cut
+                    if fb_item is not None:
+                        detected_items = [fb_item]
+                        cutouts = [
+                            SegmentResult(
+                                cutout=fb_cut,
+                                mask_area_px=self._opaque_px(fb_cut),
+                                box_coverage=1.0,
+                                source=fb_src,
+                            )
+                        ]
+                        stages.append(STAGE_FULLFRAME_FALLBACK)
+                        stages.append(STAGE_CLASSIFICATION)
+                    else:
+                        cutouts = []
+                        rejected_early = fb_reason or "no_detection"
+                else:
+                    cutouts = self._run_segmentation(image, detected_items, stages)
+                    detected_items = self._run_classification(detected_items, cutouts, stages)
+                    if cutouts and cutouts[0] is not None:
+                        cutout_source = cutouts[0].source
+                        fallback_cut = cutouts[0].cutout
+                    if detected_items:
+                        # Ilk oge icin detayli skor (debug)
+                        if fallback_cut is not None:
+                            detailed = self._classifier.classify_detailed([fallback_cut])
+                            clip_row = detailed[0] if detailed else None
+
+                if not any(item.category for item in detected_items):
+                    if rejected_early:
+                        rejected_reason = rejected_early
+                    elif clip_row and clip_row.rejected_reason:
+                        rejected_reason = clip_row.rejected_reason
+                    elif fallback_used and fallback_cut is None:
+                        rejected_reason = "cutout_failed"
+                    elif yolo_count == 0:
+                        rejected_reason = "no_detection"
+                    else:
+                        rejected_reason = "below_threshold"
+
+                if debug:
+                    from app.services.category_debug import write_category_debug
+
+                    pred = clip_row.prediction if clip_row else None
+                    write_category_debug(
+                        job_id=job,
+                        cutout=fallback_cut,
+                        all_scores=(clip_row.all_scores if clip_row else {}),
+                        chosen_category=pred.label if pred else None,
+                        confidence=pred.confidence if pred else None,
+                        threshold=settings.backend_min_confidence,
+                        rejected_reason=rejected_reason,
+                        yolo_count=yolo_count,
+                        fallback_used=fallback_used,
+                        cutout_source=cutout_source,
+                    )
+
                 synced, queued = self._run_backend_sync(
                     detected_items,
                     cutouts,
@@ -115,6 +202,17 @@ class ImageAnalyzer:
                 )
         except UnidentifiedImageError as exc:
             raise InvalidImageError("Dosya gecerli bir gorsel olarak okunamadi.") from exc
+
+        categorized = any(item.category for item in detected_items)
+        user_message = None
+        if not categorized and rejected_reason:
+            user_message = {
+                "below_threshold": USER_MSG_BELOW_THRESHOLD,
+                "cutout_failed": USER_MSG_CUTOUT_FAILED,
+                "no_detection": USER_MSG_NO_DETECTION,
+                "empty_image": USER_MSG_CUTOUT_FAILED,
+                "empty_mask": USER_MSG_CUTOUT_FAILED,
+            }.get(rejected_reason, USER_MSG_BELOW_THRESHOLD)
 
         return ImageAnalysisResult(
             metadata=metadata,
@@ -130,6 +228,10 @@ class ImageAnalyzer:
             classification_model=(
                 self._classifier.model_name if STAGE_CLASSIFICATION in stages else None
             ),
+            job_id=job,
+            rejected_reason=rejected_reason if not categorized else None,
+            user_message=user_message,
+            category_debug_dir=str(settings.studio_debug_dir) + "/" + job if debug else None,
         )
 
     def _run_segmentation(
@@ -170,6 +272,90 @@ class ImageAnalyzer:
         if any(result.source == "sam" for result in results):
             stages.append(STAGE_SEGMENTATION)
         return results
+
+    @staticmethod
+    def _empty_or_unusable_mask_reason(cut: Image.Image) -> Optional[str]:
+        """Bos / carsaf maske — CLIP'e gonderme, dolaba yazma."""
+        import numpy as np
+
+        from app.services.garment_studio import is_low_confidence_mask
+
+        if cut.mode != "RGBA":
+            return "empty_mask"
+        alpha = np.asarray(cut.split()[-1], dtype=np.uint8)
+        if int((alpha > 127).sum()) < 200:
+            return "empty_mask"
+        if is_low_confidence_mask(alpha):
+            return "cutout_failed"
+        return None
+
+    @staticmethod
+    def _opaque_px(cut: Image.Image) -> int:
+        import numpy as np
+
+        alpha = cut.split()[-1] if cut.mode == "RGBA" else None
+        if alpha is None:
+            return cut.size[0] * cut.size[1]
+        return int((np.asarray(alpha) > 127).sum())
+
+    def _fullframe_garment_fallback(
+        self, image: Image.Image
+    ) -> Tuple[
+        Optional[DetectedItem],
+        Optional[Image.Image],
+        str,
+        Optional[str],
+        Optional[ClassificationResult],
+    ]:
+        """YOLO bosken rembg/chroma + CLIP — dolaba yazilacak tek parca.
+
+        COCO'da tişört yok; masa/gölge sahnelerinde tespit 0 kalabiliyor.
+        """
+        from app.services.garment_normalizer import garment_normalizer
+        from app.services.garment_studio import has_meaningful_alpha
+
+        try:
+            cut, src = garment_normalizer._cutout(image, prefer_rembg=True)
+        except Exception:
+            logger.exception("Full-frame cutout basarisiz")
+            return None, None, "none", "cutout_failed", None
+
+        if cut is None:
+            return None, None, src, "cutout_failed", None
+        empty_reason = self._empty_or_unusable_mask_reason(cut)
+        if empty_reason:
+            logger.warning("Full-frame fallback maske reddedildi: %s src=%s", empty_reason, src)
+            return None, cut, src, empty_reason, None
+        if not has_meaningful_alpha(cut):
+            return None, cut, src, "cutout_failed", None
+
+        detailed = self._classifier.classify_detailed([cut])
+        row = detailed[0] if detailed else ClassificationResult(None, {}, "empty_image")
+        pred = row.prediction
+        if pred is None:
+            return None, cut, src, row.rejected_reason or "below_threshold", row
+        if pred.confidence < settings.backend_min_confidence:
+            row = ClassificationResult(pred, row.all_scores, "below_threshold")
+            return None, cut, src, "below_threshold", row
+
+        w, h = image.size
+        item = DetectedItem(
+            label="full_frame",
+            class_id=-1,
+            confidence=0.0,
+            bounding_box=BoundingBox(
+                x1=0, y1=0, x2=float(w), y2=float(h), width=float(w), height=float(h)
+            ),
+            category=pred.label,
+            category_confidence=pred.confidence,
+            cutout_image_base64=encode_cutout(cut),
+            segmentation=SegmentationInfo(
+                source=src,
+                mask_area_px=self._opaque_px(cut),
+                box_coverage=1.0,
+            ),
+        )
+        return item, cut, src, None, row
 
     def _run_classification(
         self,

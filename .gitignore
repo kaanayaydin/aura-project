@@ -43,8 +43,11 @@ config.local.json
 *.safetensors
 *.bin
 *.onnx
+!**/rotnet_v1.onnx
 checkpoints/
-models/
+/models/
+aura-vision/models/
+aura-vton/models/
 uploads/
 outputs/
 results/
@@ -54,6 +57,7 @@ data/
 # Operating System & IDE artifacts
 .DS_Store
 Thumbs.db
+*.ses
 .idea/
 .vscode/
 *.swp
@@ -61,6 +65,9 @@ Thumbs.db
 # Virtual Environments
 **/.venv/
 **/venv/
+
+# Vision orientation debug artifacts (Adim 1)
+**/debug_output/
 
 # Build artifacts
 **/target/

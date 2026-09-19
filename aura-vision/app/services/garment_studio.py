@@ -379,15 +379,28 @@ def compose_studio(
     background: Tuple[int, int, int] = _DEFAULT_BG,
     margin_ratio: float = 0.08,
     drop_shadow: bool = True,
+    vertical_bias: float = 0.08,
 ) -> Image.Image:
-    """Kiyafeti stüdyo kanvasina ortala (en-boy korunur, letterbox pad)."""
+    """Kiyafeti simetrik stüdyo kutusuna ortala (yatay merkeze kilitli).
+
+    vertical_bias: 0 = geometrik orta; >0 kiyafeti biraz yukarı kaydırır (katalog).
+    """
     rgba = cutout_rgba.convert("RGBA")
     box = alpha_bbox(rgba)
     if box is None:
         canvas_w, canvas_h = canvas_size_for_aspect(aspect, long_side)
         return Image.new("RGB", (canvas_w, canvas_h), background)
 
-    garment = rgba.crop(box)
+    # Simetrik pad: bbox'a esit pay ekle (kirpik / yaka kesilmesin)
+    left, top, right, bottom = box
+    gw0, gh0 = right - left, bottom - top
+    pad = max(2, int(round(max(gw0, gh0) * 0.02)))
+    left = max(0, left - pad)
+    top = max(0, top - pad)
+    right = min(rgba.size[0], right + pad)
+    bottom = min(rgba.size[1], bottom + pad)
+
+    garment = rgba.crop((left, top, right, bottom))
     canvas_w, canvas_h = canvas_size_for_aspect(aspect, long_side)
     max_w = int(canvas_w * (1.0 - 2 * margin_ratio))
     max_h = int(canvas_h * (1.0 - 2 * margin_ratio))
@@ -398,12 +411,13 @@ def compose_studio(
     garment = garment.resize((new_w, new_h), Image.LANCZOS)
 
     canvas = Image.new("RGBA", (canvas_w, canvas_h), (*background, 255))
+    # Yatay: kesin merkez. Dikey: hafif yukarı bias (e-ticaret flat-lay).
     x = (canvas_w - new_w) // 2
-    y = (canvas_h - new_h) // 2
+    y_center = (canvas_h - new_h) // 2
+    y = int(round(y_center - vertical_bias * canvas_h * 0.5))
+    y = max(int(margin_ratio * canvas_h), min(y, canvas_h - new_h - int(margin_ratio * canvas_h)))
 
     if drop_shadow:
-        shadow = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 0))
-        # Alfa'dan yumusak golge
         alpha = garment.split()[-1]
         shadow_layer = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 55))
         shadow_layer.putalpha(alpha.point(lambda a: int(a * 0.35)))

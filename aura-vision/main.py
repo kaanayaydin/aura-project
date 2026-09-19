@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.vision import router as vision_router
+from app.core.build_info import version_payload
 from app.core.config import settings
 from app.core.exceptions import ModelUnavailableError
 from app.services.object_detector import object_detector
@@ -105,7 +106,13 @@ def create_app() -> FastAPI:
                 "background": settings.studio_background_hex,
                 "rembg": settings.studio_rembg_enabled,
             },
+            "commit": version_payload()["commit"],
+            "started_at": version_payload()["started_at"],
         }
+
+    @app.get("/version", tags=["System"], summary="Pipeline git commit")
+    async def version_check() -> dict:
+        return version_payload()
 
     return app
 

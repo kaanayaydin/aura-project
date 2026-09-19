@@ -10,8 +10,8 @@ ve tek seferliktir.
 
 import logging
 import threading
-from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PIL import Image, ImageColor
 
@@ -30,6 +30,16 @@ class CategoryPrediction:
 
     label: str
     confidence: float
+    all_scores: Dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class ClassificationResult:
+    """Tek kesim icin tam CLIP sonucu (sirali skorlar + red nedeni)."""
+
+    prediction: Optional[CategoryPrediction]
+    all_scores: Dict[str, float]
+    rejected_reason: Optional[str] = None
 
 
 class StyleClassifier:
@@ -95,27 +105,34 @@ class StyleClassifier:
         Donen liste girdi sirasini korur; siniflandirilamayan ogeler icin
         `None` doner (bos kesim, esik alti guven vb.).
         """
+        return [row.prediction for row in self.classify_detailed(images)]
+
+    def classify_detailed(self, images: Sequence[Image.Image]) -> List[ClassificationResult]:
+        """classify + tum etiket skorlari + rejected_reason."""
+        empty = ClassificationResult(None, {}, "empty_image")
         if not images:
             return []
 
-        # Sifir boyutlu kesimler CLIP'i hata verdirir; onceden ayiklaniyor.
         usable: List[Tuple[int, Image.Image]] = []
         for index, image in enumerate(images):
             if image.width > 0 and image.height > 0:
                 usable.append((index, self._flatten(image)))
 
-        predictions: List[Optional[CategoryPrediction]] = [None] * len(images)
+        results: List[ClassificationResult] = [empty] * len(images)
         if not usable:
-            return predictions
+            return results
 
-        for index, prediction in zip(
+        for index, row in zip(
             (item[0] for item in usable),
-            self._predict([item[1] for item in usable]),
+            self._predict_detailed([item[1] for item in usable]),
         ):
-            predictions[index] = prediction
-        return predictions
+            results[index] = row
+        return results
 
     def _predict(self, images: List[Image.Image]) -> List[Optional[CategoryPrediction]]:
+        return [row.prediction for row in self._predict_detailed(images)]
+
+    def _predict_detailed(self, images: List[Image.Image]) -> List[ClassificationResult]:
         import torch
 
         model, processor = self.load()
@@ -145,18 +162,32 @@ class StyleClassifier:
         probabilities = outputs.logits_per_image.softmax(dim=1)
         best_scores, best_indices = probabilities.max(dim=1)
 
-        predictions: List[Optional[CategoryPrediction]] = []
-        for score, label_index in zip(best_scores.tolist(), best_indices.tolist()):
+        rows: List[ClassificationResult] = []
+        labels = list(settings.candidate_labels)
+        for probs, score, label_index in zip(
+            probabilities.tolist(),
+            best_scores.tolist(),
+            best_indices.tolist(),
+        ):
+            all_scores = {
+                labels[i]: round(float(p), 4) for i, p in enumerate(probs) if i < len(labels)
+            }
             if score < settings.clip_min_confidence:
-                predictions.append(None)
-                continue
-            predictions.append(
-                CategoryPrediction(
-                    label=settings.candidate_labels[label_index],
-                    confidence=round(float(score), 4),
+                rows.append(
+                    ClassificationResult(
+                        prediction=None,
+                        all_scores=all_scores,
+                        rejected_reason="below_threshold",
+                    )
                 )
+                continue
+            pred = CategoryPrediction(
+                label=labels[label_index],
+                confidence=round(float(score), 4),
+                all_scores=all_scores,
             )
-        return predictions
+            rows.append(ClassificationResult(prediction=pred, all_scores=all_scores))
+        return rows
 
     @staticmethod
     def _flatten(image: Image.Image) -> Image.Image:
