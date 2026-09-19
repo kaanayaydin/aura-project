@@ -28,7 +28,13 @@ public record CreateWardrobeItemRequest(
         String imageUrl,
 
         @Size(max = 40, message = "color en fazla 40 karakter olabilir")
-        String color) {
+        String color,
+
+        /**
+         * true: istemci stüdyo/onay rotasyonunu zaten uyguladi; Vision
+         * normalizeGarment tekrar cagrilmaz. JSON'da yoksa Jackson {@code false}.
+         */
+        boolean alreadyNormalized) {
 
     public boolean hasImageUrl() {
         return imageUrl != null && !imageUrl.isBlank();

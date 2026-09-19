@@ -93,23 +93,30 @@ public class WardrobeService {
         byte[] finalBytes = sourceBytes;
         String finalMime = sourceMime;
 
-        Optional<byte[]> studio = visionGarmentClient.normalizeGarmentPng(
-                sourceBytes, request.category() == null ? "garment.png" : request.category() + ".png");
-        if (studio.isPresent()) {
-            finalBytes = studio.get();
-            finalMime = Base64Images.MIME_PNG;
-            imageBytes = finalBytes.length;
+        if (request.alreadyNormalized()) {
             log.info(
-                    "Wardrobe studio normalize uygulandi: category={} bytes={} mime={}",
+                    "Wardrobe studio normalize atlandi (alreadyNormalized=true): category={} bytes={}",
                     request.category(),
-                    imageBytes,
-                    finalMime);
+                    sourceBytes.length);
         } else {
-            log.info(
-                    "Wardrobe studio normalize atlandi/basarisiz: category={} sourceBytes={} mime={}",
-                    request.category(),
-                    sourceBytes.length,
-                    sourceMime);
+            Optional<byte[]> studio = visionGarmentClient.normalizeGarmentPng(
+                    sourceBytes, request.category() == null ? "garment.png" : request.category() + ".png");
+            if (studio.isPresent()) {
+                finalBytes = studio.get();
+                finalMime = Base64Images.MIME_PNG;
+                imageBytes = finalBytes.length;
+                log.info(
+                        "Wardrobe studio normalize uygulandi: category={} bytes={} mime={}",
+                        request.category(),
+                        imageBytes,
+                        finalMime);
+            } else {
+                log.info(
+                        "Wardrobe studio normalize atlandi/basarisiz: category={} sourceBytes={} mime={}",
+                        request.category(),
+                        sourceBytes.length,
+                        sourceMime);
+            }
         }
 
         if (finalMime == null || finalMime.isBlank()) {
