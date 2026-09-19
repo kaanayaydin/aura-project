@@ -69,3 +69,10 @@ bir kural fark edersen:
    kendisi uygulayacak" diye açıkça belirt.
 3. CLAUDE_MD_PROPOSED_CHANGES.md dosyasını commit etme — bu da benim
    (kullanıcının) inceleyip silmesi/uygulaması gereken bir dosya.
+
+## Roadmap Farkındalığı
+ROADMAP.md dosyasını oku, şu an hangi fazda olduğumuzu anla. Bir görev
+tamamlandığında ROADMAP.md'deki ilgili checkbox'ı KENDIN işaretleme —
+bu kullanıcının kararı. Ama raporunda "bu, ROADMAP.md'deki [Faz X, madde Y]
+ile ilgili" diye referans ver, böylece kullanıcı hangi maddeyi
+işaretleyeceğini kolayca bulur.

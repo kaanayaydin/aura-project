@@ -50,3 +50,8 @@ bu değişikliği kimin/neyin (author) yaptığını ve içeriğin denetimi
 sıkılaştırıp sıkılaştırmadığını veya gevşetip gevşetmediğini ayrıca
 raporla — bu her zaman ayrı bir uyarı maddesi olarak çıkmalı, normal
 kod değişikliği gibi geçilmemeli.
+
+7. ROADMAP.md'de işaretli (✅) bir madde varsa ve o maddeyle ilgili bir
+   denetim yapıyorsan, işaretin gerçek duruma uyup uymadığını da
+   değerlendir — örneğin "Faz 1b tamam" işaretliyse ama kota sayacı
+   kodda yoksa, bunu bir tutarsızlık olarak raporla.
