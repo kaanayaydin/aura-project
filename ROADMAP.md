@@ -9,8 +9,8 @@
 
 Bu, üzerinde çalıştığımız zincir — bitmeden hiçbir şeye başlamayın, çünkü VTON'un ve dolabın temel doğruluğu buna bağlı.
 
-- [ ] Orientation onay UI + backend koruması (re-normalize, skip_orientation, rembg tutarlılığı) — **neredeyse tamam**
-- [ ] Kalan küçük temizlikler (test izolasyonu, docstring düzeltmesi)
+- [x] Orientation onay UI + backend koruması (re-normalize, skip_orientation, rembg tutarlılığı) — **neredeyse tamam**
+- [x] Kalan küçük temizlikler (test izolasyonu, docstring düzeltmesi)
 - [ ] Kategori tespiti (YOLO-boş fallback) golden-set regresyonu genişletme
 
 **Çıkış kriteri:** Dolaba yüklenen her fotoğraf (düz, eğik, perspektifli) tutarlı, doğru yönlü, 3:4 formatında saklanıyor; kullanıcı kararı hiçbir koşulda sessizce ezilmiyor.
