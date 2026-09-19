@@ -1,6 +1,8 @@
 import 'package:aura_mobile/models/analyze_result.dart';
 import 'package:aura_mobile/models/auth_token.dart';
 import 'package:aura_mobile/models/chat_message.dart';
+import 'package:aura_mobile/models/normalize_garment_result.dart';
+import 'package:aura_mobile/models/orientation_choice.dart';
 import 'package:aura_mobile/models/outfit_favorite.dart';
 import 'package:aura_mobile/models/suggestion.dart';
 import 'package:aura_mobile/models/vton_job.dart';
@@ -217,4 +219,107 @@ void main() {
     expect(chat.isFallback, isFalse);
     expect(chat.wardrobeCount, 5);
   });
+
+  test('NormalizeGarmentResult parses snake_case orientation fields', () {
+    final result = NormalizeGarmentResult.fromJson({
+      'image_base64': _tinyPngB64,
+      'job_id': 'job-1',
+      'ensemble_confidence': 'medium',
+      'rotation_suggested': 'right',
+      'requires_confirmation': true,
+      'rotation_deg_applied': 0,
+      'rotation_method': 'skipped_pending_confirmation',
+      'width': 768,
+      'height': 1024,
+    });
+    expect(result.jobId, 'job-1');
+    expect(result.ensembleConfidence, 'medium');
+    expect(result.rotationSuggested, 'right');
+    expect(result.requiresConfirmation, isTrue);
+    expect(result.rotationDegApplied, 0);
+    expect(result.rotationMethod, 'skipped_pending_confirmation');
+    expect(result.needsConfirmation, isTrue);
+    expect(result.imageBytes, isNotEmpty);
+  });
+
+  test('NormalizeGarmentResult camelCase and missing requiresConfirmation → false', () {
+    final result = NormalizeGarmentResult.fromJson({
+      'imageBase64': _tinyPngB64,
+      'jobId': 'legacy',
+      'ensembleConfidence': 'high',
+      'rotationSuggested': 'top',
+      'rotationDegApplied': 0,
+      'rotationMethod': 'none',
+    });
+    expect(result.requiresConfirmation, isFalse);
+    expect(result.isHigh, isTrue);
+    expect(result.needsConfirmation, isFalse);
+    expect(result.jobId, 'legacy');
+  });
+
+  test('NormalizeGarmentResult legacy JSON without ensemble fields does not break', () {
+    final result = NormalizeGarmentResult.fromJson({
+      'image_base64': _tinyPngB64,
+      'message': 'ok',
+      'width': 10,
+      'height': 10,
+    });
+    expect(result.requiresConfirmation, isFalse);
+    expect(result.ensembleConfidence, '');
+    expect(result.rotationSuggested, 'top');
+    expect(result.rotationDegApplied, 0);
+    expect(result.rotationMethod, 'none');
+    expect(result.needsConfirmation, isFalse);
+  });
+
+  test('high never needs confirmation even if flag true', () {
+    final result = NormalizeGarmentResult.fromJson({
+      'image_base64': _tinyPngB64,
+      'ensemble_confidence': 'high',
+      'requires_confirmation': true,
+      'rotation_suggested': 'bottom',
+    });
+    expect(result.needsConfirmation, isFalse);
+  });
+
+  test('OrientationChoice confirmed_rotation_deg: evet / manuel / orijinal', () {
+    expect(OrientationChoice.suggestedCcwDeg('right'), 90);
+    expect(OrientationChoice.suggestedCcwDeg('left'), 270);
+    expect(OrientationChoice.suggestedCcwDeg('bottom'), 180);
+    expect(OrientationChoice.suggestedCcwDeg('top'), 0);
+
+    expect(OrientationChoice.suggestedCwQuarterTurns('right'), 3);
+    expect(OrientationChoice.suggestedCwQuarterTurns('left'), 1);
+    expect(OrientationChoice.suggestedCwQuarterTurns('bottom'), 2);
+    expect(OrientationChoice.suggestedCwQuarterTurns('top'), 0);
+
+    expect(OrientationChoice.cwTurnsToCcwDeg(0), 0);
+    expect(OrientationChoice.cwTurnsToCcwDeg(1), 270);
+    expect(OrientationChoice.cwTurnsToCcwDeg(2), 180);
+    expect(OrientationChoice.cwTurnsToCcwDeg(3), 90);
+
+    final yesRight = OrientationChoice.confirmedRotationDeg(
+      useOriginal: false,
+      previewCwTurns: OrientationChoice.suggestedCwQuarterTurns('right'),
+    );
+    expect(yesRight, 90);
+
+    final manualCwFromTop = OrientationChoice.confirmedRotationDeg(
+      useOriginal: false,
+      previewCwTurns: OrientationChoice.addCwTurns(
+        OrientationChoice.suggestedCwQuarterTurns('top'),
+        1,
+      ),
+    );
+    expect(manualCwFromTop, 270);
+
+    final original = OrientationChoice.confirmedRotationDeg(
+      useOriginal: true,
+      previewCwTurns: 3,
+    );
+    expect(original, 0);
+  });
 }
+
+const _tinyPngB64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhAGAhKMMowAAAABJRU5ErkJggg==';

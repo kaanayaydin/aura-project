@@ -12,6 +12,7 @@ import '../models/suggestion.dart';
 import '../models/user_perfume.dart';
 import '../models/vton_job.dart';
 import '../models/vton_lookbook_entry.dart';
+import '../models/normalize_garment_result.dart';
 import '../models/wardrobe_item.dart';
 import '../models/weather_snapshot.dart';
 
@@ -293,8 +294,11 @@ class ApiService {
     );
   }
 
-  /// Vision garment studio: dekupaj + 3:4 stüdyo framing → PNG baytlari.
-  Future<Uint8List> normalizeGarment({
+  /// Vision garment studio: dekupaj + 3:4 stüdyo + orientation alanlari.
+  ///
+  /// Backend'de `POST .../confirm-rotation` yok; onay sonrasi yerel döndürüp
+  /// `createWardrobeItem` yazilir (ayrı backend görevi).
+  Future<NormalizeGarmentResult> normalizeGarment({
     required Uint8List bytes,
     required String fileName,
     String aspect = '3:4',
@@ -315,11 +319,11 @@ class ApiService {
     _ensureOk(response, 'Garment normalize basarisiz');
     final json =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final b64 = json['image_base64'] as String? ?? json['imageBase64'] as String?;
-    if (b64 == null || b64.isEmpty) {
-      throw ApiException(500, 'Normalize cevabinda image_base64 yok');
+    try {
+      return NormalizeGarmentResult.fromJson(json);
+    } on FormatException catch (error) {
+      throw ApiException(500, error.message);
     }
-    return base64Decode(b64);
   }
 
   Future<({String uploadUrl, String objectUrl})> requestUploadUrl({

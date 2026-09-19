@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,13 +7,16 @@ import 'package:image_picker/image_picker.dart';
 import '../core/config.dart';
 import '../models/auth_token.dart';
 import '../models/chat_message.dart';
+import '../models/orientation_choice.dart';
 import '../models/outfit_favorite.dart';
 import '../models/suggestion.dart';
 import '../models/user_perfume.dart';
 import '../models/vton_lookbook_entry.dart';
 import '../models/wardrobe_item.dart';
+import '../models/wardrobe_upload_outcome.dart';
 import '../services/api_service.dart';
 import '../services/auth_secure_store.dart';
+import '../services/image_rotate.dart';
 import '../services/person_photo_service.dart';
 
 final authSecureStoreProvider = Provider<AuthSecureStore>((ref) {
@@ -146,6 +150,34 @@ final wardrobeProvider =
   WardrobeNotifier.new,
 );
 
+final wardrobeUploadPhaseProvider =
+    NotifierProvider<WardrobeUploadPhaseNotifier, WardrobeUploadPhase>(
+  WardrobeUploadPhaseNotifier.new,
+);
+
+class WardrobeUploadPhaseNotifier extends Notifier<WardrobeUploadPhase> {
+  @override
+  WardrobeUploadPhase build() => const WardrobeUploadIdle();
+
+  void setIdle() => state = const WardrobeUploadIdle();
+
+  void setLoading() => state = const WardrobeUploadLoading();
+
+  void setPending(PendingOrientationConfirmation pending) => state = pending;
+
+  void setSaving({
+    required Uint8List previewBytes,
+    required String category,
+  }) {
+    state = WardrobeUploadSaving(
+      previewBytes: previewBytes,
+      category: category,
+    );
+  }
+
+  void setError(String message) => state = WardrobeUploadError(message);
+}
+
 class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
   @override
   Future<List<WardrobeItem>> build() async {
@@ -172,72 +204,138 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
     });
   }
 
-  /// Galeri/kamera → Vision /analyze (kategori) → tek POST wardrobe (backend normalize).
-  ///
-  /// Cift kayit onlenir: analyze'a JWT gitmez (Vision sync yazmaz);
-  /// istemci MinIO/normalize yapmaz — tek createWardrobeItem + imageBase64.
-  Future<String> uploadFromSource(ImageSource source) async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: source,
-      maxWidth: 1600,
-      imageQuality: 85,
-    );
-    if (file == null) {
-      return 'Iptal edildi.';
-    }
+  WardrobeUploadPhaseNotifier get _phase =>
+      ref.read(wardrobeUploadPhaseProvider.notifier);
 
-    final bytes = await file.readAsBytes();
+  /// Galeri/kamera → analyze (kategori) → normalize-garment →
+  /// high: kaydet | medium/low: [PendingOrientationConfirmation].
+  Future<WardrobeUploadOutcome> uploadFromSource(ImageSource source) async {
+    _phase.setLoading();
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (file == null) {
+        _phase.setIdle();
+        return const WardrobeUploadCancelled();
+      }
 
-    await ref.read(authSessionProvider.notifier).ensure();
+      final bytes = await file.readAsBytes();
+      await ref.read(authSessionProvider.notifier).ensure();
 
-    final analyze = await _api.analyzeImage(
-      bytes: bytes,
-      fileName: file.name,
-      contentType: file.mimeType ?? 'image/jpeg',
-      forwardAuth: false,
-    );
+      final analyze = await _api.analyzeImage(
+        bytes: bytes,
+        fileName: file.name,
+        contentType: file.mimeType ?? 'image/jpeg',
+        forwardAuth: false,
+      );
 
-    // En guvenilir tek aday (cutout varsa tercih)
-    final candidates = <({String category, double? confidence})>[];
-    for (final d in analyze.withCutouts) {
-      final c = d.category;
-      if (c == null || c.isEmpty) continue;
-      candidates.add((category: c, confidence: d.categoryConfidence));
-    }
-    if (candidates.isEmpty) {
-      for (final d in analyze.detectedCategories) {
+      final candidates = <({String category, double? confidence})>[];
+      for (final d in analyze.withCutouts) {
         final c = d.category;
         if (c == null || c.isEmpty) continue;
         candidates.add((category: c, confidence: d.categoryConfidence));
       }
-    }
+      if (candidates.isEmpty) {
+        for (final d in analyze.detectedCategories) {
+          final c = d.category;
+          if (c == null || c.isEmpty) continue;
+          candidates.add((category: c, confidence: d.categoryConfidence));
+        }
+      }
 
-    if (candidates.isEmpty) {
+      if (candidates.isEmpty) {
+        _phase.setIdle();
+        await refresh(silent: true);
+        return const WardrobeUploadDone(
+          'Vision analiz tamam ama kategori bulunamadi; dolaba yazilmadi.',
+        );
+      }
+
+      candidates.sort(
+        (a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0),
+      );
+      final best = candidates.first;
+
+      var saveBytes = bytes;
+      try {
+        final normalize = await _api.normalizeGarment(
+          bytes: bytes,
+          fileName: file.name,
+        );
+        if (normalize.needsConfirmation) {
+          final pending = PendingOrientationConfirmation(
+            normalize: normalize,
+            category: best.category,
+            categoryConfidence: best.confidence,
+          );
+          _phase.setPending(pending);
+          return WardrobeUploadNeedsConfirmation(pending);
+        }
+        saveBytes = normalize.imageBytes;
+      } on ApiException {
+        // Eski Vision (normalize yok/kirik): ham gorsel → backend studio.
+      }
+
+      return await _saveBytes(
+        bytes: saveBytes,
+        category: best.category,
+        categoryConfidence: best.confidence,
+        message:
+            'Analiz tamam (${best.category}). Stüdyo normalize dolaba kaydedildi.',
+      );
+    } catch (error) {
+      _phase.setError('$error');
+      rethrow;
+    }
+  }
+
+  /// Onay ekranı kararı → yerel döndür (confirm-rotation endpoint yok) → dolap.
+  Future<String> completeConfirmedUpload({
+    required PendingOrientationConfirmation pending,
+    required OrientationConfirmDecision decision,
+  }) async {
+    var bytes = pending.normalize.imageBytes;
+    if (!decision.useOriginal && decision.previewCwTurns % 4 != 0) {
+      bytes = await rotatePngClockwise(bytes, decision.previewCwTurns);
+    }
+    final outcome = await _saveBytes(
+      bytes: bytes,
+      category: pending.category,
+      categoryConfidence: pending.categoryConfidence,
+      message: 'Yön onaylandı. Stüdyo görsel dolaba kaydedildi.',
+    );
+    return outcome.message;
+  }
+
+  void cancelOrientationConfirmation() => _phase.setIdle();
+
+  Future<WardrobeUploadDone> _saveBytes({
+    required Uint8List bytes,
+    required String category,
+    required String message,
+    double? categoryConfidence,
+  }) async {
+    _phase.setSaving(previewBytes: bytes, category: category);
+    try {
+      await _api.createWardrobeItem(
+        category: category,
+        categoryConfidence: categoryConfidence,
+        imageBase64: base64Encode(bytes),
+      );
+      // ignore: avoid_print
+      print(
+        '[Aura] Tek dolap kaydi: category=$category '
+        'conf=$categoryConfidence bytes=${bytes.length}',
+      );
       await refresh(silent: true);
-      return 'Vision analiz tamam ama kategori bulunamadi; dolaba yazilmadi.';
+      return WardrobeUploadDone(message);
+    } finally {
+      _phase.setIdle();
     }
-
-    candidates.sort(
-      (a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0),
-    );
-    final best = candidates.first;
-
-    // Tek kayit: ham gorsel → backend studio normalize + MinIO
-    await _api.createWardrobeItem(
-      category: best.category,
-      categoryConfidence: best.confidence,
-      imageBase64: base64Encode(bytes),
-    );
-
-    // ignore: avoid_print
-    print(
-      '[Aura] Tek dolap kaydi: category=${best.category} '
-      'conf=${best.confidence} bytes=${bytes.length}',
-    );
-
-    await refresh(silent: true);
-    return 'Analiz tamam (${best.category}). Stüdyo normalize dolaba kaydedildi.';
   }
 }
 

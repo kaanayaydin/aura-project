@@ -1,11 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/theme.dart';
+import '../models/orientation_choice.dart';
+import '../models/wardrobe_upload_outcome.dart';
 import '../providers/providers.dart';
 import '../services/api_service.dart';
 import '../widgets/wardrobe_tile.dart';
+import 'orientation_confirmation_screen.dart';
 import 'wardrobe_item_detail_screen.dart';
 
 class WardrobeScreen extends ConsumerStatefulWidget {
@@ -22,6 +27,8 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
   @override
   Widget build(BuildContext context) {
     final wardrobe = ref.watch(wardrobeProvider);
+    final uploadPhase = ref.watch(wardrobeUploadPhaseProvider);
+    final pendingSave = uploadPhase is WardrobeUploadSaving ? uploadPhase : null;
 
     return Scaffold(
       body: SafeArea(
@@ -68,7 +75,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                   onRetry: () => ref.read(wardrobeProvider.notifier).refresh(),
                 ),
                 data: (items) {
-                  if (items.isEmpty) {
+                  if (items.isEmpty && pendingSave == null) {
                     return const _EmptyWardrobe();
                   }
                   final categories = items
@@ -90,6 +97,8 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                         (item.color?.toLowerCase() == _colorFilter!.toLowerCase());
                     return categoryOk && colorOk;
                   }).toList();
+                  final showPending = pendingSave != null;
+                  final gridCount = filtered.length + (showPending ? 1 : 0);
 
                   return Column(
                     children: [
@@ -112,7 +121,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                           backgroundColor: AuraTheme.carbonElevated,
                           onRefresh: () =>
                               ref.read(wardrobeProvider.notifier).refresh(),
-                          child: filtered.isEmpty
+                          child: gridCount == 0
                               ? ListView(
                                   children: const [
                                     SizedBox(height: 80),
@@ -133,9 +142,15 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                                     crossAxisSpacing: 12,
                                     childAspectRatio: 0.72,
                                   ),
-                                  itemCount: filtered.length,
+                                  itemCount: gridCount,
                                   itemBuilder: (_, index) {
-                                    final item = filtered[index];
+                                    if (showPending && index == 0) {
+                                      return _PendingWardrobeTile(
+                                        bytes: pendingSave.previewBytes,
+                                        category: pendingSave.category,
+                                      );
+                                    }
+                                    final item = filtered[showPending ? index - 1 : index];
                                     return GestureDetector(
                                       onTap: () {
                                         Navigator.of(context).push(
@@ -219,11 +234,53 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
     );
 
     try {
-      final message =
+      final outcome =
           await ref.read(wardrobeProvider.notifier).uploadFromSource(source);
-      if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      switch (outcome) {
+        case WardrobeUploadCancelled():
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Iptal edildi.')),
+          );
+        case WardrobeUploadDone(:final message):
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        case WardrobeUploadNeedsConfirmation(:final pending):
+          final decision =
+              await Navigator.of(context).push<OrientationConfirmDecision>(
+            MaterialPageRoute(
+              builder: (_) => OrientationConfirmationScreen(
+                result: pending.normalize,
+              ),
+            ),
+          );
+          if (!context.mounted) return;
+          if (decision == null) {
+            ref.read(wardrobeProvider.notifier).cancelOrientationConfirmation();
+            return;
+          }
+          try {
+            final message = await ref
+                .read(wardrobeProvider.notifier)
+                .completeConfirmedUpload(
+                  pending: pending,
+                  decision: decision,
+                );
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            }
+          } catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_friendlyError(error))),
+              );
+            }
+          }
       }
     } catch (error) {
       if (context.mounted) {
@@ -238,6 +295,81 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
   String _friendlyError(Object error) {
     if (error is ApiException) return error.message;
     return 'Baglanti hatasi: backend (8080) veya vision (8000) ayakta mi?';
+  }
+}
+
+class _PendingWardrobeTile extends StatelessWidget {
+  const _PendingWardrobeTile({
+    required this.bytes,
+    required this.category,
+  });
+
+  final Uint8List bytes;
+  final String category;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('pending-wardrobe-thumb'),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161920),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AuraTheme.champagneGold.withValues(alpha: 0.35),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
+                const ColoredBox(
+                  color: Color(0x660F1115),
+                  child: Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AuraTheme.champagneGold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontSize: 15,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'kaydediliyor…',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AuraTheme.mistMuted,
+                        fontSize: 12,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
