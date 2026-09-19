@@ -43,3 +43,10 @@ et.
    `ensemble`/`deg` canlı `decision.json` ile birebir mi? Eski sızıntılı
    sayılar (ör. real_duz_r90 high/270) güncel diye sunuluyorsa bunu
    tutarsızlık olarak yaz.
+
+6. Ek kontrol: CLAUDE.md'nin son commit'te değişip değişmediğini kontrol et
+(git log -1 --format='%H' CLAUDE.md, HEAD ile karşılaştır). Değişmişse,
+bu değişikliği kimin/neyin (author) yaptığını ve içeriğin denetimi
+sıkılaştırıp sıkılaştırmadığını veya gevşetip gevşetmediğini ayrıca
+raporla — bu her zaman ayrı bir uyarı maddesi olarak çıkmalı, normal
+kod değişikliği gibi geçilmemeli.
