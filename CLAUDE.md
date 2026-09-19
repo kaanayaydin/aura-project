@@ -36,3 +36,10 @@ et.
 
 4. Asla kod düzeltmesi ÖNERME veya YAZMA bu modda — sadece doğrula ve
    raporla. Düzeltme kararı kullanıcıya ve Cursor'a ait.
+
+5. Orientation / RotNet / golden-set değişikliği denetleniyorsa
+   `docs/rotnet_ensemble_golden_report.md` HEAD ile aynı mı bak:
+   başlıktaki commit = `git rev-parse --short HEAD` mi, tablodaki
+   `ensemble`/`deg` canlı `decision.json` ile birebir mi? Eski sızıntılı
+   sayılar (ör. real_duz_r90 high/270) güncel diye sunuluyorsa bunu
+   tutarsızlık olarak yaz.
