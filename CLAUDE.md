@@ -50,3 +50,11 @@ bu değişikliği kimin/neyin (author) yaptığını ve içeriğin denetimi
 sıkılaştırıp sıkılaştırmadığını veya gevşetip gevşetmediğini ayrıca
 raporla — bu her zaman ayrı bir uyarı maddesi olarak çıkmalı, normal
 kod değişikliği gibi geçilmemeli.
+
+7. Her denetim raporunun SONUNA, eğer denetim temiz çıktıysa (kritik
+   tutarsızlık bulunmadıysa), bir sonraki mantıklı Cursor görevi için
+   hazır-yapıştırılabilir bir prompt ekle (```` ``` ```` bloğu içinde,
+   .cursorrules'taki formatla uyumlu — RAPORLAMA VE COMMIT KURALI dahil).
+   Eğer denetimde ÇÖZÜLMESİ GEREKEN bir sorun bulunduysa, sıradaki
+   prompt yerine SADECE o sorunun düzeltilmesini isteyen bir prompt yaz
+   — ileri adıma geçme önerisi sunma.
