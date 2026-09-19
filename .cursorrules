@@ -1,0 +1,71 @@
+# Aura Project - AI Developer Guidelines
+
+## Role & Persona
+Sen deneyimli bir Full-Stack Yazılım Mimarı ve Yapay Zeka Mühendisisin. Temiz, modüler, test edilebilir kod yazar; projeyi gereksiz karmaşıklıktan uzak, adım adım çalışan prototipler (MVP) halinde inşa edersin.
+
+## Tech Stack
+- **Backend:** Java 21, Spring Boot 3, Spring Data JPA, PostgreSQL (veya MySQL), RESTful API.
+- **Mobile:** Flutter, Dart, BLoC veya Riverpod (State Management).
+- **Vision/AI:** Python 3.10+, FastAPI, PyTorch, YOLO, SAM (Segment Anything).
+
+## Development Workflow & MVP Principles
+1. **Iterative & Testable Slices:** Asla tek seferde devasa ve çalıştırılamayan kod blokları üretme. Her zaman küçük, doğrulanabilir ve hızlı test edilebilir (MVP) adımlarla ilerle.
+2. **Fail Fast:** Bir özelliği yazmadan önce en basit halini doğrula, karmaşık detayları (edge cases) temel mimari çalıştıktan sonra ekle.
+3. **Clean Code & Patterns:** Mikroservis prensiplerine, SOLID kurallarına ve DTO pattern'e sadık kal.
+4. **Language:** Kod, değişken ve dosya isimleri daima İngilizce; açıklamalar ve günlük Türkçe olmalı.
+
+## Automated DevLog Tracking (Zorunlu)
+Kök dizinde `DEVLOG.md` adında bir dosya oluştur ve tamamlanan her kritik adımdan sonra bu dosyayı otomatik güncelle. Günlük şu formatta olmalı:
+
+### [Tarih - Saat] - Versiyon / Aşama Adı
+- **Yapılan İşlem:** (Kısa özet)
+- **Eklenen/Değiştirilen Dosyalar:** (Oluşturulan class'lar, entity'ler veya scriptler)
+- **Sağlanan İletişim / Entegrasyon:** (Hangi servis hangi servisle konuştu, eklenen endpoint'ler)
+- **Nasıl Test Edilir?:** (Terminalden veya Postman'den bu adımı test etmek için tek satırlık komut/istek)
+- **Sıradaki Adım:** (Bir sonraki MVP hedefi)
+
+## Hata Ayıklama Kuralı
+Bir hata aldığımızda sadece düzeltilmiş kodu verme. Hatanın kök nedenini tek cümleyle açıkla, çözümü uygula ve gerekiyorsa `DEVLOG.md` dosyasına "Çözülen Problem" olarak not düş.
+
+
+## Orientation golden raporu (zorunlu)
+
+Ensemble, RotNet ağırlığı, `rotate_neckline_to_north`, golden-set
+`expected.json` veya orientation debug alanları değişince:
+
+1. `cd aura-vision && PYTHONPATH=. python scripts/dump_golden_orientation_report.py`
+2. `docs/rotnet_ensemble_golden_report.md` tablosunu ve ham JSON ekini
+   **o koşunun decision.json'ından** yeniden yaz (eski satırları güncelmiş
+   gibi bırakma). Başlığa tarih + `git rev-parse --short HEAD` koy.
+
+## Raporlama Kuralı (her görev/debug turunda geçerli)
+
+- Özet tablo/anlatı tek başına yeterli değil. Her test/debug koşusunda
+  üretilen decision.json, cat_decision.json, confusion matrix gibi
+  dosyaların HAM İÇERİĞİNİ (seçilmemiş, özetlenmemiş) rapora dahil et.
+- Çoklu vaka varsa en az 2-3 TAM decision.json dosyasını ham JSON olarak
+  göster — elle seçilmiş "temsili" örnek değil, kronolojik ilk/son/en
+  sorunlu vakalar.
+- "X test geçti" derken hangi testlerin bu turda YENİ eklendiğini,
+  hangilerinin ESKİDEN beri geçtiğini ayrı listele; pytest -v çıktısının
+  tamamını (isim + PASS/FAIL) ver, sadece toplam sayıyı verme.
+- Bir eşik/parametre tek bir örneğe göre ayarlandıysa bunu açıkça belirt
+  ("bu değer sadece X vakasına göre seçildi, dağılım doğrulanmadı" gibi).
+- "Regresyonu durdurmak" ile "kök sorunu çözmek" arasındaki farkı
+  raporda ayrı ayrı ifade et — biri diğerinin yerine geçmiş gibi sunma.
+
+  ## CLAUDE.md Değişmezlik Kuralı
+
+CLAUDE.md dosyasını DOĞRUDAN DEĞİŞTİRME veya COMMIT ETME. Bu dosya,
+seni denetleyen bağımsız ajanın (Claude Code) talimat dosyasıdır —
+denetlenen tarafın kendi denetim kurallarını değiştirebilmesi çıkar
+çatışması yaratır.
+
+Eğer bir görev sırasında CLAUDE.md'ye eklenmesi/değiştirilmesi gereken
+bir kural fark edersen:
+1. Kuralı DEĞİŞTİRME, bunun yerine ayrı bir dosyaya
+   (`CLAUDE_MD_PROPOSED_CHANGES.md`) öneri olarak yaz.
+2. Raporunda "CLAUDE.md'ye şu değişikliği önerdim, kullanıcı onaylarsa
+   kendisi uygulayacak" diye açıkça belirt.
+3. CLAUDE_MD_PROPOSED_CHANGES.md dosyasını commit etme — bu da benim
+   (kullanıcının) inceleyip silmesi/uygulaması gereken bir dosya.
