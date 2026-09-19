@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,7 @@ import pytest
 from PIL import Image
 
 from app.core.config import settings
+from app.services import garment_normalizer as gn_mod
 from app.services.garment_normalizer import GarmentNormalizer, garment_normalizer
 from app.services.garment_polish import detect_neckline_edge, rotate_neckline_to_north
 from app.services.garment_studio import canvas_size_for_aspect
@@ -165,6 +167,23 @@ def _rgb_studio_png() -> bytes:
     return _png_bytes(img)
 
 
+def _patch_studio_rembg(monkeypatch, *, enabled: bool, prefer: bool) -> None:
+    """Üretim rembg bayraklarını bu teste özel bağla; monkeypatch.undo geri alır.
+
+    Settings frozen dataclass — ``setattr`` FrozenInstanceError verir.
+    ``object.__setattr__`` singleton'ı kirletir (conftest autouse olmadan
+    sonraki teste sızar). Bu yüzden ``dataclasses.replace`` kopyasını
+    ``garment_normalizer.settings`` import bağına takarız; asıl singleton
+    dokunulmaz.
+    """
+    patched = replace(
+        settings,
+        studio_rembg_enabled=enabled,
+        studio_prefer_rembg=prefer,
+    )
+    monkeypatch.setattr(gn_mod, "settings", patched)
+
+
 def _count_try_rembg(monkeypatch):
     calls = {"n": 0}
 
@@ -187,8 +206,7 @@ def test_skip_orientation_never_calls_rembg_when_production_flags_on(monkeypatch
     Eski kod prefer=False ile 3. dalı (enabled and not prefer) açık bırakıyordu.
     Mock, canlı koşudaki _try_rembg sayacını simüle eder.
     """
-    object.__setattr__(settings, "studio_rembg_enabled", True)
-    object.__setattr__(settings, "studio_prefer_rembg", True)
+    _patch_studio_rembg(monkeypatch, enabled=True, prefer=True)
     calls = _count_try_rembg(monkeypatch)
     result = garment_normalizer.normalize(
         _rgb_studio_png(),
@@ -204,8 +222,7 @@ def test_skip_orientation_never_calls_rembg_when_production_flags_on(monkeypatch
 
 def test_prefer_false_fallback_rembg_runs_without_skip(monkeypatch):
     """3. dal niyeti: rembg açık, prefer kapalı, skip yok → alfa yoksa rembg."""
-    object.__setattr__(settings, "studio_rembg_enabled", True)
-    object.__setattr__(settings, "studio_prefer_rembg", False)
+    _patch_studio_rembg(monkeypatch, enabled=True, prefer=False)
     calls = _count_try_rembg(monkeypatch)
     result = garment_normalizer.normalize(
         _rgb_studio_png(),
@@ -219,8 +236,7 @@ def test_prefer_false_fallback_rembg_runs_without_skip(monkeypatch):
 
 def test_prefer_false_fallback_rembg_skipped_with_skip_orientation(monkeypatch):
     """F2 regresyon: 3. dal skip_orientation iken de kapalı."""
-    object.__setattr__(settings, "studio_rembg_enabled", True)
-    object.__setattr__(settings, "studio_prefer_rembg", False)
+    _patch_studio_rembg(monkeypatch, enabled=True, prefer=False)
     calls = _count_try_rembg(monkeypatch)
     result = garment_normalizer.normalize(
         _rgb_studio_png(),
@@ -233,8 +249,7 @@ def test_prefer_false_fallback_rembg_skipped_with_skip_orientation(monkeypatch):
 
 
 def test_skip_orientation_prefers_existing_alpha_not_rembg(monkeypatch):
-    object.__setattr__(settings, "studio_rembg_enabled", True)
-    object.__setattr__(settings, "studio_prefer_rembg", True)
+    _patch_studio_rembg(monkeypatch, enabled=True, prefer=True)
     calls = _count_try_rembg(monkeypatch)
     result = garment_normalizer.normalize(
         _png_bytes(_rgba_tshirt_neckline()),
@@ -244,6 +259,30 @@ def test_skip_orientation_prefers_existing_alpha_not_rembg(monkeypatch):
     )
     assert calls["n"] == 0
     assert result.cutout_source == "alpha"
+
+
+def test_studio_rembg_flag_patch_does_not_leak_singleton(monkeypatch):
+    """B1: patch singleton'ı kirletmez; undo import bağını geri alır.
+
+    conftest autouse'a bel bağlanmaz — --noconftest ile de geçer.
+    """
+    singleton_before = (settings.studio_rembg_enabled, settings.studio_prefer_rembg)
+    binding_before = (gn_mod.settings.studio_rembg_enabled, gn_mod.settings.studio_prefer_rembg)
+    assert gn_mod.settings is settings
+
+    _patch_studio_rembg(monkeypatch, enabled=True, prefer=False)
+    assert gn_mod.settings.studio_rembg_enabled is True
+    assert gn_mod.settings.studio_prefer_rembg is False
+    assert gn_mod.settings is not settings
+    assert (settings.studio_rembg_enabled, settings.studio_prefer_rembg) == singleton_before
+
+    monkeypatch.undo()
+    assert gn_mod.settings is settings
+    assert (
+        gn_mod.settings.studio_rembg_enabled,
+        gn_mod.settings.studio_prefer_rembg,
+    ) == binding_before
+    assert (settings.studio_rembg_enabled, settings.studio_prefer_rembg) == singleton_before
 
 
 @pytest.mark.skipif(
@@ -261,8 +300,7 @@ def test_skip_orientation_prefers_existing_alpha_not_rembg(monkeypatch):
 )
 def test_live_skip_orientation_does_not_invoke_real_rembg(case_id, rel, monkeypatch):
     """Canlı rembg + üretim bayrakları + skip_orientation; _try_rembg sarmalayıcı sayar."""
-    object.__setattr__(settings, "studio_rembg_enabled", True)
-    object.__setattr__(settings, "studio_prefer_rembg", True)
+    _patch_studio_rembg(monkeypatch, enabled=True, prefer=True)
     orig = GarmentNormalizer._try_rembg
     calls = {"n": 0}
 

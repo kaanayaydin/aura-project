@@ -113,8 +113,10 @@ class GarmentNormalizer:
         - polish zinciri tamamen atlanır: askı temizliği, deskew, kardinal
           rotasyon/ensemble **ve** catalog press. Yalnız ``compose_studio``
           (3:4 crop/letterbox) uygulanır.
-        - Anlamlı alfa varsa o kullanılır; yoksa chroma. Silüeti yeniden
-          kesmez.
+        - Anlamlı alfa varsa o korunur (yeniden kesilmez). Alfasız RGB
+          girdide ``chroma_cutout`` silüeti yeniden keser — rembg atlanır,
+          chroma atlanmaz. Pixel-idempotent değil (önceki ölçüm: chroma
+          vs. kaynak alfa IoU ~0.93–0.97).
         """
         if not raw_bytes:
             raise ValueError("Bos gorsel")
