@@ -26,6 +26,7 @@ from app.schemas.vision import (
     ImageMetadata,
     SegmentationInfo,
 )
+from app.services.image_limits import assert_within_pixel_limits
 from app.services.object_detector import ObjectDetector, object_detector
 from app.services.segmenter import SegmentResult, Segmenter, segmenter
 from app.services.style_classifier import ClassificationResult, StyleClassifier, style_classifier
@@ -101,6 +102,7 @@ class ImageAnalyzer:
 
         `bearer_token`: istemcinin JWT'si — sync aciksa demo token yerine bu kullanilir.
         """
+        assert_within_pixel_limits(raw_bytes)
         try:
             with Image.open(BytesIO(raw_bytes)) as image:
                 image_format = (image.format or "UNKNOWN").upper()

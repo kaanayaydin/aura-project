@@ -222,3 +222,30 @@ def test_yolo_empty_fallback_golden_category(case, request):
         )
     if case.get("expect_below_min_foreground"):
         assert mean_op < case["mean_opaque_max"], (case["id"], mean_op, _MIN_FOREGROUND)
+
+
+@pytest.mark.parametrize(
+    "case",
+    EXPECTED["cases"],
+    ids=[c["id"] for c in EXPECTED["cases"]],
+)
+def test_normalize_garment_http_matches_expected(case):
+    """Gerçek POST /normalize-garment (skip_orientation yok) = expected.json."""
+    nh = case.get("normalize_http")
+    assert nh, (case["id"], "normalize_http dump script'ten yazılmalı")
+    from fastapi.testclient import TestClient
+    from main import app
+
+    raw = (ROOT / case["file"]).read_bytes()
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/normalize-garment",
+        files={"file": (case["id"] + ".png", raw, "image/png")},
+    )
+    assert resp.status_code == nh["status"], (case["id"], resp.status_code, resp.text[:500])
+    if nh["status"] == 200:
+        assert resp.json().get("status") == "success"
+        return
+    detail = resp.json()["detail"]
+    assert detail["rejected_reason"] == nh["rejected_reason"], (case["id"], detail)
+

@@ -49,12 +49,49 @@ class ImageForegroundTest {
     }
 
     @Test
-    void outOfMemoryIsRejectNotPass() {
+    void outOfMemoryMappingIsDeadDefensiveNet() {
+        // Gerçek heap OOM tetiklemez. Header MAX_PIXELS + 512px altörnekleme
+        // sonrası inspect() catch'i pratikte ulaşılamaz (ölü savunma ağı).
+        // Bu test yalnızca verdictForDecodeFailure eşlemesini kilitler.
         ImageForeground.Inspection oom =
                 ImageForeground.verdictForDecodeFailure(new OutOfMemoryError("Java heap space"));
         assertThat(oom.verdict()).isEqualTo(ImageForeground.Verdict.DECODE_FAILED);
         assertThat(ImageForeground.verdictForDecodeFailure(new IOException("skip")).verdict())
                 .isEqualTo(ImageForeground.Verdict.OK);
+    }
+
+    @Test
+    void unparseableBytesFailClosed() {
+        byte[] garbage = PngBombs.unparseableGarbage();
+        assertThat(garbage.length).isGreaterThanOrEqualTo(ImageForeground.MIN_PARSE_BYTES);
+        ImageForeground.Inspection header = ImageForeground.inspectHeader(garbage);
+        assertThat(header.verdict()).isEqualTo(ImageForeground.Verdict.DECODE_FAILED);
+    }
+
+    @Test
+    void webpVp8xHugeRejectedFromMagicWithoutImageIo() {
+        byte[] bomb = PngBombs.webpVp8x(30_000, 30_000);
+        ImageForeground.Inspection header = ImageForeground.inspectHeader(bomb);
+        assertThat(header.verdict()).isEqualTo(ImageForeground.Verdict.TOO_LARGE);
+        assertThat(header.width()).isEqualTo(30_000);
+        assertThat(header.height()).isEqualTo(30_000);
+    }
+
+    @Test
+    void bmpHugeRejectedFromMagic() {
+        byte[] bomb = PngBombs.bmpDeclared(20_000, 20_000);
+        ImageForeground.Inspection header = ImageForeground.inspectHeader(bomb);
+        assertThat(header.verdict()).isEqualTo(ImageForeground.Verdict.TOO_LARGE);
+        assertThat(header.width()).isEqualTo(20_000);
+        assertThat(header.height()).isEqualTo(20_000);
+    }
+
+    @Test
+    void fortyEightMegapixelPhoneShotIsConsciousReject() {
+        assertThat(ImageForeground.exceedsLimit(8000, 6000)).isTrue();
+        byte[] png = PngBombs.declaredSize(8000, 6000);
+        assertThat(ImageForeground.inspectHeader(png).verdict())
+                .isEqualTo(ImageForeground.Verdict.TOO_LARGE);
     }
 
     @Test

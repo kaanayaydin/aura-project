@@ -14,8 +14,10 @@ from app.services.garment_studio import (
     canvas_size_for_aspect,
     chroma_cutout,
     compose_studio,
+    cutout_gate_stats,
     has_meaningful_alpha,
     parse_hex_color,
+    unusable_mask_reason,
 )
 
 
@@ -658,3 +660,146 @@ def test_orientation_signals_on_synthetic_tshirt():
     left = scores["detail"]["left"]
     assert top["centrality_score"] >= left["centrality_score"]
     assert "depth_score" in top and "symmetry_score" in top
+
+
+def _leftover_l1_mid_rgba() -> Image.Image:
+    """mean~0.04, L1=130 leftover. 150 eşiğinde cutout_failed; 122'de kabul."""
+    img = Image.new("RGBA", (256, 336), (232, 226, 214, 0))
+    px = img.load()
+    for y in range(134, 201):
+        for x in range(102, 153):
+            px[x, y] = (180, 180, 182, 255)
+    return img
+
+
+def _small_mean_015_rgba() -> Image.Image:
+    """mean~0.0156, L1~366. 0.022 eşiğinde too_small; 0.0105'te kabul."""
+    img = Image.new("RGBA", (256, 336), (232, 226, 214, 0))
+    px = img.load()
+    for y in range(147, 189):
+        for x in range(112, 144):
+            px[x, y] = (36, 92, 178, 255)
+    return img
+
+
+def test_l1_window_122_150_stays_cutout_failed():
+    """L1∈(122,150) leftover + mean≥0.022 → cutout_failed.
+
+    Eşik 150→122 olursa bu vaka kabul edilir (test FAIL). Dağılım yok;
+    bu RGBA sentetiğe göre kilit.
+    """
+    from app.services import garment_studio as gs
+
+    cut = _leftover_l1_mid_rgba()
+    stats = cutout_gate_stats(cut)
+    assert 122.0 < stats["fg_bg_l1"] < 150.0, stats
+    assert stats["mean_opaque"] >= gs.SMALL_ACCEPT_MEAN
+    assert stats["mean_opaque"] < 0.06
+    assert gs.FG_BG_L1_MIN == 150.0
+    assert unusable_mask_reason(cut) == "cutout_failed"
+
+
+def test_l1_mutation_122_would_accept(monkeypatch):
+    from app.services import garment_studio as gs
+
+    cut = _leftover_l1_mid_rgba()
+    assert unusable_mask_reason(cut) == "cutout_failed"
+    monkeypatch.setattr(gs, "FG_BG_L1_MIN", 122.0)
+    assert unusable_mask_reason(cut) is None
+
+
+def test_small_accept_window_0105_022_stays_too_small():
+    """mean∈(0.0105, 0.022) + L1≥150 → garment_too_small.
+
+    tiny_garment_distant mean=0.0104 bu pencereyi kaçırır. Bu RGBA ~0.015.
+    Eşik 0.022→0.0105 olursa kabul (test FAIL).
+    """
+    from app.services import garment_studio as gs
+
+    cut = _small_mean_015_rgba()
+    stats = cutout_gate_stats(cut)
+    assert 0.0105 < stats["mean_opaque"] < 0.022, stats
+    assert stats["fg_bg_l1"] >= 150.0, stats
+    assert gs.SMALL_ACCEPT_MEAN == 0.022
+    assert unusable_mask_reason(cut) == "garment_too_small"
+
+
+def test_small_accept_mutation_0105_would_accept(monkeypatch):
+    from app.services import garment_studio as gs
+
+    cut = _small_mean_015_rgba()
+    assert unusable_mask_reason(cut) == "garment_too_small"
+    monkeypatch.setattr(gs, "SMALL_ACCEPT_MEAN", 0.0105)
+    assert unusable_mask_reason(cut) is None
+
+
+def test_normalize_endpoint_png_bomb_returns_413():
+    import struct
+    import zlib
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+    ihdr = struct.pack(">IIBBBBB", 30_000, 30_000, 8, 2, 0, 0, 0)
+    bomb = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+        + chunk(b"IEND", b"")
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/normalize-garment",
+        files={"file": ("bomb.png", bomb, "image/png")},
+    )
+    assert resp.status_code == 413, resp.text
+    detail = resp.json()["detail"]
+    assert detail["rejected_reason"] == "image_too_large"
+    assert detail["width"] == 30_000
+
+
+def test_normalize_endpoint_garbage_returns_422_fail_closed():
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/normalize-garment",
+        files={"file": ("x.bin", b"ABCDEFGHIJKLMNOPQRSTUVWXYZ012345", "application/octet-stream")},
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["rejected_reason"] == "decode_failed"
+
+
+def test_analyze_endpoint_png_bomb_returns_413():
+    import struct
+    import zlib
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+    ihdr = struct.pack(">IIBBBBB", 30_000, 30_000, 8, 2, 0, 0, 0)
+    bomb = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+        + chunk(b"IEND", b"")
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/analyze",
+        files={"file": ("bomb.png", bomb, "image/png")},
+    )
+    assert resp.status_code == 413, resp.text
+    detail = resp.json()["detail"]
+    assert detail["rejected_reason"] == "image_too_large"
+

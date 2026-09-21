@@ -13,6 +13,11 @@ from app.services.image_analyzer import (
     UnsupportedImageFormatError,
     image_analyzer,
 )
+from app.services.image_limits import (
+    ImagePixelLimitError,
+    ImageUnreadableError,
+    assert_within_pixel_limits,
+)
 import logging
 
 logger = logging.getLogger("aura.vision.api")
@@ -24,6 +29,30 @@ def _form_flag(raw: Optional[str]) -> bool:
     if raw is None or str(raw).strip() == "":
         return False
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _reject_unsafe_pixels(raw_bytes: bytes) -> None:
+    """Header peek — cutout/CLIP/YOLO öncesi. Java ImageForeground ile aynı limit."""
+    try:
+        assert_within_pixel_limits(raw_bytes)
+    except ImagePixelLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": str(exc),
+                "width": exc.width,
+                "height": exc.height,
+            },
+        ) from exc
+    except ImageUnreadableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": "Gorsel okunamadi, lutfen baska bir fotoğraf deneyin",
+            },
+        ) from exc
 
 
 def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
@@ -66,6 +95,8 @@ async def analyze_image(
             detail="Gorsel {0} MB sinirini asiyor.".format(settings.max_upload_size_mb),
         )
 
+    _reject_unsafe_pixels(raw_bytes)
+
     bearer = _extract_bearer(authorization)
 
     try:
@@ -77,6 +108,24 @@ async def analyze_image(
             bearer_token=bearer,
             debug=bool(debug),
         )
+    except ImagePixelLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": str(exc),
+                "width": exc.width,
+                "height": exc.height,
+            },
+        ) from exc
+    except ImageUnreadableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": "Gorsel okunamadi, lutfen baska bir fotoğraf deneyin",
+            },
+        ) from exc
     except UnsupportedImageFormatError as exc:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -155,6 +204,8 @@ async def normalize_garment(
             detail="Gorsel {0} MB sinirini asiyor.".format(settings.max_upload_size_mb),
         )
 
+    _reject_unsafe_pixels(raw_bytes)
+
     shadow: Optional[bool] = None
     if drop_shadow is not None and str(drop_shadow).strip() != "":
         shadow = str(drop_shadow).strip().lower() in {"1", "true", "yes", "on"}
@@ -176,6 +227,24 @@ async def normalize_garment(
             detail={
                 "rejected_reason": exc.rejected_reason,
                 "user_message": exc.user_message,
+            },
+        ) from exc
+    except ImagePixelLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": str(exc),
+                "width": exc.width,
+                "height": exc.height,
+            },
+        ) from exc
+    except ImageUnreadableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": "Gorsel okunamadi, lutfen baska bir fotoğraf deneyin",
             },
         ) from exc
     except ValueError as exc:

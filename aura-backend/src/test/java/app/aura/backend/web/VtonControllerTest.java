@@ -10,6 +10,7 @@ import app.aura.backend.model.User;
 import app.aura.backend.model.WardrobeItem;
 import app.aura.backend.repository.UserRepository;
 import app.aura.backend.security.JwtService;
+import app.aura.backend.support.PngBombs;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
@@ -307,5 +308,53 @@ class VtonControllerTest {
                                 }
                                 """.formatted(itemId, owner.getId())))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void personImageDecompressionBombReturns413AndDoesNotConsumeQuota() throws Exception {
+        User user = new User("vton-bomb", "vton-bomb@aura.app");
+        user.addWardrobeItem(new WardrobeItem("shirt", 0.9, PNG, "image/png", "navy"));
+        user = userRepository.save(user);
+        Long itemId = user.getWardrobeItems().getFirst().getId();
+        String bomb = Base64.getEncoder().encodeToString(PngBombs.declaredSize(30_000, 30_000));
+
+        mockMvc.perform(post("/api/v1/aura/vton/request")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "wardrobeItemId": %d,
+                                  "personImageBase64": "%s"
+                                }
+                                """.formatted(itemId, bomb)))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.rejected_reason").value("image_too_large"));
+
+        User reloaded = userRepository.findById(user.getId()).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(reloaded.getDailyVtonCount()).isEqualTo(0);
+    }
+
+    @Test
+    void personImageUnparseableReturns422FailClosedWithoutQuota() throws Exception {
+        User user = new User("vton-garbage", "vton-garbage@aura.app");
+        user.addWardrobeItem(new WardrobeItem("shirt", 0.9, PNG, "image/png", "navy"));
+        user = userRepository.save(user);
+        Long itemId = user.getWardrobeItems().getFirst().getId();
+        String garbage = Base64.getEncoder().encodeToString(PngBombs.unparseableGarbage());
+
+        mockMvc.perform(post("/api/v1/aura/vton/request")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "wardrobeItemId": %d,
+                                  "personImageBase64": "%s"
+                                }
+                                """.formatted(itemId, garbage)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.rejected_reason").value("decode_failed"));
+
+        User reloaded = userRepository.findById(user.getId()).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(reloaded.getDailyVtonCount()).isEqualTo(0);
     }
 }

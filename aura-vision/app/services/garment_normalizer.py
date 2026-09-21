@@ -26,21 +26,28 @@ from app.services.garment_studio import (
     boost_contrast,
     chroma_cutout,
     compose_studio,
+    cutout_gate_stats,
     has_meaningful_alpha,
     is_low_confidence_mask,
     parse_hex_color,
     refine_garment_alpha,
-    unusable_mask_reason,
     unusable_user_message,
 )
+from app.services.image_limits import assert_within_pixel_limits
 
 
 class UnusableCutoutError(ValueError):
     """Cutout bos/carsaf — HTTP 422 rejected_reason."""
 
-    def __init__(self, rejected_reason: str, user_message: str):
+    def __init__(
+        self,
+        rejected_reason: str,
+        user_message: str,
+        stats: Optional[dict] = None,
+    ):
         self.rejected_reason = rejected_reason
         self.user_message = user_message
+        self.stats = stats or {}
         super().__init__(rejected_reason)
 
 logger = logging.getLogger("aura.vision.normalize")
@@ -70,6 +77,7 @@ class NormalizeResult:
     deskew_input_angle_estimated: float = 0.0
     deskew_skip_reason: Optional[str] = None
     ensemble_confidence: str = ""
+    gate_stats: Optional[dict] = None
 
 
 def _onnxruntime_available() -> bool:
@@ -132,6 +140,8 @@ class GarmentNormalizer:
         if not raw_bytes:
             raise ValueError("Bos gorsel")
 
+        assert_within_pixel_limits(raw_bytes)
+
         try:
             image = Image.open(io.BytesIO(raw_bytes))
             image.load()
@@ -189,10 +199,13 @@ class GarmentNormalizer:
             except Exception:
                 logger.exception("Studio polish basarisiz — ham cutout ile framing")
 
-        reject = unusable_mask_reason(cutout)
+        stats = cutout_gate_stats(cutout)
+        reject = stats["reason"]
         if reject:
             logger.info("Normalize reddedildi: %s (bos/carsaf tuval yazilmayacak)", reject)
-            raise UnusableCutoutError(reject, unusable_user_message(reject))
+            raise UnusableCutoutError(
+                reject, unusable_user_message(reject), stats=stats
+            )
 
         aspect_key = (aspect or settings.studio_aspect or "3:4").strip()
         if aspect_key not in ("3:4", "1:1"):
@@ -322,6 +335,7 @@ class GarmentNormalizer:
             requires_confirmation=bool(polish_trace.get("requires_confirmation")),
             ensemble_confidence=str(polish_trace.get("ensemble_confidence") or ""),
             cutout_rgba=cutout_keep,
+            gate_stats=stats,
             deskew_step_executed=bool(polish_trace.get("deskew_step_executed")),
             deskew_input_angle_estimated=float(
                 polish_trace.get("deskew_input_angle_estimated") or 0.0

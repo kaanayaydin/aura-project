@@ -442,6 +442,45 @@ class WardrobeControllerTest {
         assertThat(wardrobeItemRepository.findByUserId(user.getId())).isEmpty();
     }
 
+    @Test
+    void createItem_unparseableFormat_returns422FailClosed() throws Exception {
+        User user = userRepository.save(new User(
+                "garbage-" + System.nanoTime(),
+                "garbage-" + System.nanoTime() + "@aura.app"));
+        String garbageB64 = Base64.getEncoder().encodeToString(PngBombs.unparseableGarbage());
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"shirt","imageBase64":"%s"}
+                                """.formatted(garbageB64)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.rejected_reason").value("decode_failed"));
+
+        verify(visionGarmentClient, never()).normalizeGarmentPng(any(), any(), anyBoolean());
+        assertThat(wardrobeItemRepository.findByUserId(user.getId())).isEmpty();
+    }
+
+    @Test
+    void createItem_webpBombHeader_returns413() throws Exception {
+        User user = userRepository.save(new User(
+                "webp-bomb-" + System.nanoTime(),
+                "webp-bomb-" + System.nanoTime() + "@aura.app"));
+        String bombB64 = Base64.getEncoder().encodeToString(PngBombs.webpVp8x(30_000, 30_000));
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"shirt","imageBase64":"%s"}
+                                """.formatted(bombB64)))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.rejected_reason").value("image_too_large"));
+
+        verify(visionGarmentClient, never()).normalizeGarmentPng(any(), any(), anyBoolean());
+    }
+
     private static String solidPngBase64(Color color) throws Exception {
         BufferedImage image = new BufferedImage(64, 80, BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = image.createGraphics();

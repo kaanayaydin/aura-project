@@ -9,10 +9,8 @@ import app.aura.backend.repository.UserRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.service.StorageService.Purpose;
 import app.aura.backend.support.Base64Images;
-import app.aura.backend.support.ImageForeground;
-import app.aura.backend.web.ImageTooLargeException;
+import app.aura.backend.web.ImageSafetyGate;
 import app.aura.backend.web.InvalidImagePayloadException;
-import app.aura.backend.web.UnusableGarmentException;
 import app.aura.backend.web.UserNotFoundException;
 import app.aura.backend.web.WardrobeItemNotFoundException;
 import app.aura.backend.web.WardrobeOwnershipException;
@@ -96,7 +94,7 @@ public class WardrobeService {
         byte[] finalBytes = sourceBytes;
         String finalMime = sourceMime;
 
-        rejectIfTooLarge(sourceBytes);
+        ImageSafetyGate.rejectUnsafeHeader(sourceBytes);
 
         boolean skipOrientation = request.alreadyNormalized();
         Optional<byte[]> studio = visionGarmentClient.normalizeGarmentPng(
@@ -122,7 +120,7 @@ public class WardrobeService {
                     skipOrientation);
         }
 
-        rejectUnusablePixels(finalBytes);
+        ImageSafetyGate.rejectUnusablePixels(finalBytes);
 
         if (finalMime == null || finalMime.isBlank()) {
             finalMime = Base64Images.MIME_PNG;
@@ -186,35 +184,6 @@ public class WardrobeService {
         } catch (RestClientException ex) {
             log.warn("Wardrobe imageUrl indirilemedi ({}): {}", url, ex.toString());
             return null;
-        }
-    }
-
-    private static void rejectIfTooLarge(byte[] bytes) {
-        ImageForeground.Inspection header = ImageForeground.inspectHeader(bytes);
-        if (header.verdict() == ImageForeground.Verdict.TOO_LARGE) {
-            throw new ImageTooLargeException(header.width(), header.height());
-        }
-        if (header.verdict() == ImageForeground.Verdict.DECODE_FAILED) {
-            throw new UnusableGarmentException(
-                    "decode_failed",
-                    "Gorsel okunamadi, lutfen baska bir fotoğraf deneyin");
-        }
-    }
-
-    private static void rejectUnusablePixels(byte[] bytes) {
-        ImageForeground.Inspection inspection = ImageForeground.inspect(bytes);
-        switch (inspection.verdict()) {
-            case TOO_LARGE -> throw new ImageTooLargeException(
-                    inspection.width(), inspection.height());
-            case DECODE_FAILED -> throw new UnusableGarmentException(
-                    "decode_failed",
-                    "Gorsel okunamadi, lutfen baska bir fotoğraf deneyin");
-            case BLANK -> throw new UnusableGarmentException(
-                    "empty_mask",
-                    "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin");
-            case OK -> {
-                // dolaba yazılabilir
-            }
         }
     }
 

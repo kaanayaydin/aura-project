@@ -56,12 +56,24 @@ Aynı koşuda gerçek kıyafet kardeş-etiket boşluğu:
 
 Bu koşuda (chroma, tek sentetik PNG; dağılım yok):
 
-| vaka | mean | fg-bg L1 | sonuç |
+| vaka | mean (normalize+polish) | fg-bg L1 | HTTP |
 |---|---|---|---|
-| `small_garment_3pct` | 0.0235 | 366 | kabul, CLIP shirt 0.655 |
-| `small_garment_5pct` | 0.0417 | 366 | kabul, CLIP shirt 0.437 |
-| `tiny_garment_distant` | 0.0104 | yüksek | `garment_too_small` |
-| `yolo_empty_blank_scene` | 0.0405 | 90 | `cutout_failed` (leftover) |
-| `empty_wood_floor` | 0.0033 | 20 | `cutout_failed` |
+| `small_garment_3pct` | 0.02347 | 328.84 | 200 |
+| `small_garment_5pct` | 0.04165 | 328.05 | 200 |
+| `tiny_garment_distant` | 0.01033 | 329.70 | 422 `garment_too_small` |
+| `yolo_empty_blank_scene` | 0.03773 | 122.81 | 422 `cutout_failed` |
+| `empty_wood_floor` | 0.00312 | 10.98 | 422 `cutout_failed` |
 
-Eşikler `_SMALL_ACCEPT_MEAN=0.022` ve `_FG_BG_L1_MIN=150` yalnız bu tabloya göre seçildi. Açık renkli giysi + açık zemin (L1<150) hâlâ `cutout_failed` kalabilir.
+Kaynak: `scripts/dump_normalize_garment_fixture_report.py` (skip_orientation yok, rembg=false). Analyzer `_cutout` (polish yok) `blank_scene` L1~90 veriyordu — canlı endpoint 122.81. Eşikler `SMALL_ACCEPT_MEAN=0.022` ve `FG_BG_L1_MIN=150` yalnız bu tabloya göre. `blank_scene` L1=122.81, 150→122 mutasyonunda kabul olur (HTTP 200); `tiny_garment` mean=0.01033 0.022→0.0105 penceresini kaçırır.
+
+Mutasyon kilitleri (bu tur, sentetik RGBA): leftover L1∈(122,150)+mean≥0.022 → `cutout_failed` (`test_l1_window_122_150_stays_cutout_failed`); mean∈(0.0105,0.022)+L1≥150 → `garment_too_small` (`test_small_accept_window_0105_022_stays_too_small`). `tiny_garment_distant` mean=0.0104 ve `blank_scene` L1=90 bu pencereleri kaçırır.
+
+## 48MP telefon karesi — bilinçli red
+
+`ImageForeground.MAX_PIXELS = 24_000_000` ve `MAX_SIDE = 8192` (Python `image_limits.py` ile senkron). 8000×6000 (48MP) **bilinçli reddedilir**. Denetçi: yasal 24MP JPEG Vision pipeline’da ~4.7GB tepe RAM; 144MP ~6.5GB / 60sn. Limiti ~36MP’ye çekmek DoS yüzeyini büyütür. 12–16MP (4032×3024) geçer.
+
+Header parse edilemeyen format (≥24 bayt, ImageIO + WebP/BMP magic yok) fail-closed: `decode_failed` / HTTP 422. 12 baytlık test sahte PNG bu eşiğin altında atlanır.
+
+## Java `inspect()` OOM catch — ölü savunma ağı
+
+`OutOfMemoryError` yakalanır ve `DECODE_FAILED` döner; header limiti + 512px altörnekleme sonrası yasal görseller `-Xmx24m`’de bile bu yola girmez. `outOfMemoryMappingIsDeadDefensiveNet` gerçek heap OOM tetiklemez, yalnızca eşlemeyi kilitler. Canlı OOM kanıtı değildir.

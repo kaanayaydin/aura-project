@@ -242,8 +242,12 @@ MSG_GARMENT_TOO_SMALL = (
 
 # mean>=0.06 mevcut kabul bandı. 3% mavi gömlek bu koşuda mean=0.0235 / L1=366;
 # blank_scene leftover mean=0.0405 / L1=90. Bu iki sınıfa göre seçildi, dağılım yok.
-_SMALL_ACCEPT_MEAN = 0.022
-_FG_BG_L1_MIN = 150.0
+# Mutasyon kilitleri: leftover L1∈(122,150) hâlâ cutout_failed; mean∈(0.0105,0.022)
+# + L1≥150 hâlâ garment_too_small. 48MP / 24MP kararı image_limits.py.
+SMALL_ACCEPT_MEAN = 0.022
+FG_BG_L1_MIN = 150.0
+_SMALL_ACCEPT_MEAN = SMALL_ACCEPT_MEAN
+_FG_BG_L1_MIN = FG_BG_L1_MIN
 
 
 def _foreground_background_l1(cut: Image.Image) -> float:
@@ -255,6 +259,56 @@ def _foreground_background_l1(cut: Image.Image) -> float:
     fg = arr[opaque, :3].mean(axis=0)
     bg = arr[~opaque, :3].mean(axis=0)
     return float(np.abs(fg - bg).sum())
+
+
+def cutout_gate_stats(cut: Image.Image) -> dict:
+    """opaque_px / mean_opaque / fg_bg_l1 / reason — dump script ve kapı ortak."""
+    if cut.mode != "RGBA":
+        return {
+            "opaque_px": 0,
+            "mean_opaque": 0.0,
+            "fg_bg_l1": 0.0,
+            "border_opaque": 0.0,
+            "center_opaque": 0.0,
+            "reason": "empty_mask",
+        }
+    alpha = np.asarray(cut.split()[-1], dtype=np.uint8)
+    opaque = alpha > 127
+    opaque_px = int(opaque.sum())
+    mean_from_alpha = float(opaque.mean()) if opaque.size else 0.0
+    if opaque_px < 200:
+        return {
+            "opaque_px": opaque_px,
+            "mean_opaque": mean_from_alpha,
+            "fg_bg_l1": 0.0,
+            "border_opaque": 0.0,
+            "center_opaque": 0.0,
+            "reason": "empty_mask",
+        }
+    stats = mask_opaque_stats(alpha)
+    mean_op = float(stats["mean_opaque"])
+    delta = _foreground_background_l1(cut)
+    reason: str | None
+    if mean_op > 0.80:
+        reason = "cutout_failed"
+    elif stats["border_opaque"] > 0.30:
+        reason = "cutout_failed"
+    elif stats["center_opaque"] < 0.15 and mean_op > 0.4:
+        reason = "cutout_failed"
+    elif mean_op >= 0.06:
+        reason = None
+    elif delta >= FG_BG_L1_MIN:
+        reason = None if mean_op >= SMALL_ACCEPT_MEAN else "garment_too_small"
+    else:
+        reason = "cutout_failed"
+    return {
+        "opaque_px": opaque_px,
+        "mean_opaque": mean_op,
+        "fg_bg_l1": delta,
+        "border_opaque": float(stats["border_opaque"]),
+        "center_opaque": float(stats["center_opaque"]),
+        "reason": reason,
+    }
 
 
 def unusable_user_message(reason: str) -> str:
@@ -274,29 +328,7 @@ def unusable_mask_reason(cut: Image.Image) -> str | None:
       aksi → garment_too_small
     düşük L1 leftover → cutout_failed (blank_scene)
     """
-    if cut.mode != "RGBA":
-        return "empty_mask"
-    alpha = np.asarray(cut.split()[-1], dtype=np.uint8)
-    opaque = alpha > 127
-    opaque_px = int(opaque.sum())
-    if opaque_px < 200:
-        return "empty_mask"
-    stats = mask_opaque_stats(alpha)
-    if stats["mean_opaque"] > 0.80:
-        return "cutout_failed"
-    if stats["border_opaque"] > 0.30:
-        return "cutout_failed"
-    if stats["center_opaque"] < 0.15 and stats["mean_opaque"] > 0.4:
-        return "cutout_failed"
-    mean_op = stats["mean_opaque"]
-    if mean_op >= 0.06:
-        return None
-    delta = _foreground_background_l1(cut)
-    if delta >= _FG_BG_L1_MIN:
-        if mean_op >= _SMALL_ACCEPT_MEAN:
-            return None
-        return "garment_too_small"
-    return "cutout_failed"
+    return cutout_gate_stats(cut)["reason"]
 
 
 def boost_contrast(rgb: Image.Image, *, factor: float = 1.75) -> Image.Image:

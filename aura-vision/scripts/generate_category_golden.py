@@ -59,6 +59,22 @@ def borderline_fg() -> Image.Image:
     return img
 
 
+def leftover_l1_mid() -> Image.Image:
+    """RGBA leftover mean~0.04 L1=130. FG_BG_L1_MIN=150 → cutout_failed."""
+    img = Image.new("RGBA", (W, H), (232, 226, 214, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle((102, 134, 152, 200), fill=(180, 180, 182, 255))
+    return img
+
+
+def small_mean_015() -> Image.Image:
+    """RGBA ~1.56% mavi, L1~366. SMALL_ACCEPT=0.022 → garment_too_small."""
+    img = Image.new("RGBA", (W, H), (232, 226, 214, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle((112, 147, 143, 188), fill=(36, 92, 178, 255))
+    return img
+
+
 def blank_scene() -> Image.Image:
     """Kıyafetsiz sahne: seyrek alfa (RGB-only duvar chroma elips → dress FP).
 

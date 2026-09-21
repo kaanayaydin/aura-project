@@ -1,9 +1,9 @@
 {
-  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kapılar: opaque_px<200 → empty_mask; çarşaf → cutout_failed; mean<0.06 ve fg-bg L1>=150 ise mean>=0.022 kabul (3–5% giysi), aksi garment_too_small; düşük L1 leftover → cutout_failed. has_meaningful_alpha min_opaque 0.02 (eski 0.05 3–5% giysiyi kesiyordu). CLIP yoksa skip+uyarı.",
+  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kapılar: opaque_px<200 → empty_mask; çarşaf → cutout_failed; mean<0.06 ve fg-bg L1>=150 ise mean>=0.022 kabul (3–5% giysi), aksi garment_too_small; düşük L1 leftover → cutout_failed. has_meaningful_alpha min_opaque 0.02. CLIP yoksa skip+uyarı. normalize_http: dump_normalize_garment_fixture_report.py — POST /normalize-garment skip_orientation yok, rembg=false (Java skip_orientation=false). Analyzer _cutout (polish yok) blank_scene L1~90; canlı normalize+polish L1=122.81 mean=0.0377 — 150→122 mutasyonunu HTTP 422 kilidi yakalar. tiny_garment mean=0.01033 0.022→0.0105 penceresini kaçırır (unit test mean~0.015).",
   "foreground_gates": {
     "empty_mask_min_opaque_px": 200,
     "low_confidence_mean_opaque_min": 0.06,
-    "low_confidence_mean_opaque_max": 0.80,
+    "low_confidence_mean_opaque_max": 0.8,
     "small_accept_mean_opaque": 0.022,
     "fg_bg_l1_min": 150.0,
     "has_meaningful_min_opaque": 0.02
@@ -16,9 +16,21 @@
       "profile": "perspective_shadow_garment",
       "needs_clip": true,
       "expected_category": "shirt",
-      "acceptable_categories": ["shirt", "t-shirt"],
+      "acceptable_categories": [
+        "shirt",
+        "t-shirt"
+      ],
       "expected_rejected_reason": null,
-      "notes": "Trapez tişört + gölge + masa zemini."
+      "notes": "Trapez tişört + gölge + masa zemini.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.19990349436810417,
+        "fg_bg_l1": 128.33438110351562,
+        "opaque_px": 27757,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "askisiz_perspektif_golge",
@@ -27,9 +39,21 @@
       "profile": "perspective_shadow_garment",
       "needs_clip": true,
       "expected_category": "shirt",
-      "acceptable_categories": ["shirt", "t-shirt"],
+      "acceptable_categories": [
+        "shirt",
+        "t-shirt"
+      ],
       "expected_rejected_reason": null,
-      "notes": "Orijinal YOLO-0 üretim hatası fotoğrafı."
+      "notes": "Orijinal YOLO-0 üretim hatası fotoğrafı.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.6075428194993412,
+        "fg_bg_l1": 345.7559814453125,
+        "opaque_px": 387345,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "yolo_empty_borderline_fg",
@@ -38,11 +62,26 @@
       "profile": "borderline_foreground",
       "needs_clip": true,
       "expected_category": "shirt",
-      "acceptable_categories": ["shirt", "t-shirt"],
+      "acceptable_categories": [
+        "shirt",
+        "t-shirt"
+      ],
       "expected_rejected_reason": null,
       "expect_near_min_foreground": true,
-      "mean_opaque_range": [0.06, 0.10],
-      "notes": "chroma+refine mean_opaque=0.0621 (eşik 0.06 hemen üstü). Yalnız bu PNG."
+      "mean_opaque_range": [
+        0.06,
+        0.1
+      ],
+      "notes": "chroma+refine mean_opaque=0.0621 (eşik 0.06 hemen üstü). Yalnız bu PNG.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.06194196428571429,
+        "fg_bg_l1": 322.422119140625,
+        "opaque_px": 5328,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "yolo_empty_blank_scene",
@@ -54,7 +93,16 @@
       "expected_rejected_reason": "cutout_failed",
       "expect_below_min_foreground": true,
       "mean_opaque_max": 0.06,
-      "notes": "Seyrek alfa (~0.038 < 0.06) → cutout_failed. CLIP çağrılmaz."
+      "notes": "Canlı /normalize-garment (polish): mean=0.0377 L1=122.81 → cutout_failed. Analyzer _cutout L1~90 idi. L1∈(122,150)+mean≥0.022: eşik 122 olursa HTTP 200 olurdu.",
+      "normalize_http": {
+        "status": 422,
+        "rejected_reason": "cutout_failed",
+        "mean_opaque": 0.03772553943452381,
+        "fg_bg_l1": 122.81475830078125,
+        "opaque_px": 3245,
+        "cutout_source": null,
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "yolo_empty_pants",
@@ -63,9 +111,20 @@
       "profile": "other_category",
       "needs_clip": true,
       "expected_category": "pants",
-      "acceptable_categories": ["pants"],
+      "acceptable_categories": [
+        "pants"
+      ],
       "expected_rejected_reason": null,
-      "notes": "Tişört dışı kategori."
+      "notes": "Tişört dışı kategori.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.16616675967261904,
+        "fg_bg_l1": 439.68475341796875,
+        "opaque_px": 14293,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "empty_wall_flat",
@@ -75,7 +134,16 @@
       "needs_clip": false,
       "expected_category": null,
       "expected_rejected_reason": "empty_mask",
-      "notes": "Düz duvar RGB. Eski elips FP (dress~0.62); refine elips yok → empty_mask."
+      "notes": "Düz duvar RGB. Eski elips FP (dress~0.62); refine elips yok → empty_mask.",
+      "normalize_http": {
+        "status": 422,
+        "rejected_reason": "empty_mask",
+        "mean_opaque": 0.0,
+        "fg_bg_l1": 0.0,
+        "opaque_px": 0,
+        "cutout_source": null,
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "empty_wall_noise",
@@ -85,7 +153,16 @@
       "needs_clip": false,
       "expected_category": null,
       "expected_rejected_reason": "empty_mask",
-      "notes": "Gürültülü duvar. Eski elips FP (dress~0.42); şimdi empty_mask."
+      "notes": "Gürültülü duvar. Eski elips FP (dress~0.42); şimdi empty_mask.",
+      "normalize_http": {
+        "status": 422,
+        "rejected_reason": "empty_mask",
+        "mean_opaque": 0.0,
+        "fg_bg_l1": 0.0,
+        "opaque_px": 0,
+        "cutout_source": null,
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "empty_wood_floor",
@@ -95,7 +172,16 @@
       "needs_clip": false,
       "expected_category": null,
       "expected_rejected_reason": "cutout_failed",
-      "notes": "Ahşap damar. Refine sonrası mean~0.003 (444px>200) → cutout_failed (<0.06). CLIP yok."
+      "notes": "Ahşap damar. Refine sonrası mean~0.003 (444px>200) → cutout_failed (<0.06). CLIP yok.",
+      "normalize_http": {
+        "status": 422,
+        "rejected_reason": "cutout_failed",
+        "mean_opaque": 0.0031175595238095237,
+        "fg_bg_l1": 10.982261657714844,
+        "opaque_px": 419,
+        "cutout_source": null,
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "empty_gradient",
@@ -107,8 +193,20 @@
       "expected_category": null,
       "expected_rejected_reason": null,
       "expected_empty_reason": null,
-      "mean_opaque_range": [0.50, 0.80],
-      "known_issue_note": "Polarite ters çevirip çarşaf-benzeri maske (mean~0.68). 0.06–0.80 kapısı kıyafet sanır. 0.80 düşürülmez: askisiz_perspektif_golge mean=0.617. CLIP bu koşuda below_threshold olabilir veya dress FP — geometrik delik duruyor."
+      "mean_opaque_range": [
+        0.5,
+        0.8
+      ],
+      "known_issue_note": "Polarite ters çevirip çarşaf-benzeri maske (mean~0.68). 0.06–0.80 kapısı kıyafet sanır. 0.80 düşürülmez: askisiz_perspektif_golge mean=0.617. CLIP bu koşuda below_threshold olabilir veya dress FP — geometrik delik duruyor.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.6785416666666667,
+        "fg_bg_l1": 54.512237548828125,
+        "opaque_px": 91196,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "nongarment_red_circle",
@@ -118,9 +216,22 @@
       "needs_clip": true,
       "known_failure": true,
       "expected_category": "shirt",
-      "acceptable_categories": ["shirt", "t-shirt", "dress"],
+      "acceptable_categories": [
+        "shirt",
+        "t-shirt",
+        "dress"
+      ],
       "expected_rejected_reason": null,
-      "known_issue_note": "Kırmızı daire → CLIP shirt ~0.37 (bu koşu). B2 boş-sahneden farklı: nesne kesilir, 9 etiketten biri kazanır. Gap 0.08; gerçek borderline shirt gap 0.056 — gap reddi kıyafeti de düşürür."
+      "known_issue_note": "Kırmızı daire → CLIP shirt ~0.37 (bu koşu). B2 boş-sahneden farklı: nesne kesilir, 9 etiketten biri kazanır. Gap 0.08; gerçek borderline shirt gap 0.056 — gap reddi kıyafeti de düşürür.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.13888113839285715,
+        "fg_bg_l1": 427.6553039550781,
+        "opaque_px": 11946,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "nongarment_blue_box",
@@ -130,9 +241,20 @@
       "needs_clip": true,
       "known_failure": true,
       "expected_category": "pants",
-      "acceptable_categories": ["pants"],
+      "acceptable_categories": [
+        "pants"
+      ],
       "expected_rejected_reason": null,
-      "known_issue_note": "Mavi kutu → pants ~0.40, gap ~0.24 (bu koşu). Model yanlış ama kararlı; top1-top2 gap bu FP'yi yakalamaz."
+      "known_issue_note": "Mavi kutu → pants ~0.40, gap ~0.24 (bu koşu). Model yanlış ama kararlı; top1-top2 gap bu FP'yi yakalamaz.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.2524297805059524,
+        "fg_bg_l1": 374.5574951171875,
+        "opaque_px": 21713,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "nongarment_mug",
@@ -142,9 +264,22 @@
       "needs_clip": true,
       "known_failure": true,
       "expected_category": "pants",
-      "acceptable_categories": ["pants", "glasses", "shirt"],
+      "acceptable_categories": [
+        "pants",
+        "glasses",
+        "shirt"
+      ],
       "expected_rejected_reason": null,
-      "known_issue_note": "Kupa silüeti → pants ~0.38, gap ~0.23 (bu koşu). Ev eşyası FP sınıfı; gap eşiği uygulanmadı."
+      "known_issue_note": "Kupa silüeti → pants ~0.38, gap ~0.23 (bu koşu). Ev eşyası FP sınıfı; gap eşiği uygulanmadı.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.14844912574404762,
+        "fg_bg_l1": 267.0518798828125,
+        "opaque_px": 12769,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "nongarment_yellow_triangle",
@@ -155,7 +290,16 @@
       "known_failure": false,
       "expected_category": null,
       "expected_rejected_reason": "below_threshold",
-      "notes": "Sarı üçgen bu koşuda shirt 0.29 < backend_min 0.30 → below_threshold (FP değil). Dağılım doğrulanmadı; CLIP kayarsa known_failure'a çevrilebilir."
+      "notes": "Sarı üçgen bu koşuda shirt 0.29 < backend_min 0.30 → below_threshold (FP değil). Dağılım doğrulanmadı; CLIP kayarsa known_failure'a çevrilebilir.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.13239397321428573,
+        "fg_bg_l1": 338.808349609375,
+        "opaque_px": 11388,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "small_garment_3pct",
@@ -164,9 +308,21 @@
       "profile": "small_but_real",
       "needs_clip": true,
       "expected_category": "shirt",
-      "acceptable_categories": ["shirt", "t-shirt"],
+      "acceptable_categories": [
+        "shirt",
+        "t-shirt"
+      ],
       "expected_rejected_reason": null,
-      "notes": "Kare ~%3 mavi gömlek. Eski 0.05 opaque kapısı 422 kesiyordu; bu koşu mean=0.0235 L1=366 → 200. Yalnız bu PNG."
+      "notes": "Kare ~%3 mavi gömlek. Canlı normalize mean=0.02347 L1=328.84 → 200.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.0234710693359375,
+        "fg_bg_l1": 328.83795166015625,
+        "opaque_px": 7691,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "small_garment_5pct",
@@ -175,9 +331,21 @@
       "profile": "small_but_real",
       "needs_clip": true,
       "expected_category": "shirt",
-      "acceptable_categories": ["shirt", "t-shirt"],
+      "acceptable_categories": [
+        "shirt",
+        "t-shirt"
+      ],
       "expected_rejected_reason": null,
-      "notes": "Kare ~%5. Bu koşu mean=0.0417 CLIP shirt~0.44."
+      "notes": "Kare ~%5. Canlı normalize mean=0.04165 L1=328.05 → 200.",
+      "normalize_http": {
+        "status": 200,
+        "rejected_reason": null,
+        "mean_opaque": 0.0416473388671875,
+        "fg_bg_l1": 328.0458984375,
+        "opaque_px": 13647,
+        "cutout_source": "chroma",
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     },
     {
       "id": "tiny_garment_distant",
@@ -187,7 +355,22 @@
       "needs_clip": false,
       "expected_category": null,
       "expected_rejected_reason": "garment_too_small",
-      "notes": "~%1.5 mavi gömlek mean=0.0104 L1 yüksek → garment_too_small (CLIP yok)."
+      "notes": "~%1.5 mavi gömlek. Canlı normalize mean=0.01033 L1=329.70 → garment_too_small. 0.022→0.0105 mutasyonunu kaçırır (0.01033<0.0105).",
+      "normalize_http": {
+        "status": 422,
+        "rejected_reason": "garment_too_small",
+        "mean_opaque": 0.010333251953125,
+        "fg_bg_l1": 329.6982727050781,
+        "opaque_px": 3386,
+        "cutout_source": null,
+        "source": "scripts/dump_normalize_garment_fixture_report.py POST /api/v1/vision/normalize-garment (skip_orientation omitted, rembg=false)"
+      }
     }
-  ]
+  ],
+  "normalize_endpoint": {
+    "path": "POST /api/v1/vision/normalize-garment",
+    "skip_orientation": false,
+    "rembg": false,
+    "source_script": "scripts/dump_normalize_garment_fixture_report.py"
+  }
 }

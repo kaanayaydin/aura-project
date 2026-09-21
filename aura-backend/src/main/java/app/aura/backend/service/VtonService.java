@@ -13,6 +13,9 @@ import app.aura.backend.repository.UserRepository;
 import app.aura.backend.repository.VtonJobRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.service.VtonWorkerClient.WorkerStatusSnapshot;
+import app.aura.backend.support.Base64Images;
+import app.aura.backend.web.ImageSafetyGate;
+import app.aura.backend.web.InvalidImagePayloadException;
 import app.aura.backend.web.UserNotFoundException;
 import app.aura.backend.web.VtonJobNotFoundException;
 import app.aura.backend.web.VtonOwnershipException;
@@ -85,6 +88,8 @@ public class VtonService {
                         "Kullanici bulunamadi: %d".formatted(authenticatedUserId)));
         WardrobeItem item = wardrobeGuardrailService.requireOwnedItem(
                 user.getId(), request.wardrobeItemId());
+
+        rejectUnsafeVtonImages(request, item);
 
         // Kota: kuyruga almadan once tuket; worker hatasinda iade
         vtonQuotaService.consume(user);
@@ -206,6 +211,29 @@ public class VtonService {
                 .contentType(mediaType)
                 .header("Cache-Control", "private, max-age=3600")
                 .body(bytes);
+    }
+
+    /**
+     * personImageBase64 ve dolap giysisi — piksel limiti, decode yok.
+     * DTO {@code @Size(max=20_000_000)} yalnızca bayt; 30k×30k PNG ~1KB geçer.
+     */
+    private static void rejectUnsafeVtonImages(VtonRequest request, WardrobeItem item) {
+        if (request.personImageBase64() != null && !request.personImageBase64().isBlank()) {
+            rejectDecodedBase64(request.personImageBase64());
+        }
+        if (item.getImageBase64() != null && !item.getImageBase64().isBlank()) {
+            rejectDecodedBase64(item.getImageBase64());
+        }
+    }
+
+    private static void rejectDecodedBase64(String raw) {
+        byte[] decoded;
+        try {
+            decoded = Base64Images.decode(Base64Images.normalize(raw));
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidImagePayloadException("Gorsel gecerli bir base64 degeri degil.");
+        }
+        ImageSafetyGate.rejectUnsafeHeader(decoded);
     }
 
     private byte[] resolveResultBytes(VtonJob job) {
