@@ -11,6 +11,7 @@ from PIL import Image
 from app.services.image_analyzer import (
     USER_MSG_BELOW_THRESHOLD,
     USER_MSG_CUTOUT_FAILED,
+    USER_MSG_GARMENT_TOO_SMALL,
     ImageAnalyzer,
 )
 from app.services.style_classifier import CategoryPrediction, ClassificationResult
@@ -75,6 +76,7 @@ def test_below_threshold_user_message():
 def test_user_messages_are_actionable():
     assert "düz bir açıdan" in USER_MSG_BELOW_THRESHOLD
     assert "sade bir zeminde" in USER_MSG_CUTOUT_FAILED
+    assert "daha yakından" in USER_MSG_GARMENT_TOO_SMALL
 
 
 def test_fullframe_fallback_rejects_empty_mask(monkeypatch):

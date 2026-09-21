@@ -49,3 +49,19 @@ Aynı koşuda gerçek kıyafet kardeş-etiket boşluğu:
 | `yolo_empty_pants` | pants 0.7408 | t-shirt 0.1026 | 0.6382 |
 
 **Neden top1−top2 gap reddi bu turda uygulanmadı:** kırmızı daireyi yakalayan bir eşik (`gap<0.10`) gerçek `shirt`/`t-shirt` kardeşlerini de reddeder. Mavi kutu / kupa ise yanlış ama **kararlı** (gap ~0.23) — gap onları kaçırır. Golden: üç FP `known_failure`; üçgen beklenen `below_threshold`.
+
+## Küçük giysi vs leftover (mean 0.02–0.06)
+
+`has_meaningful_alpha` eski `opaque>=0.05` kapısı kare alanının %3–5’ini dolduran meşru giysiyi `cutout_failed` yapıyordu. `unusable_mask_reason` ayrıca `mean_opaque<0.06` iken hepsini `cutout_failed` sayıyordu.
+
+Bu koşuda (chroma, tek sentetik PNG; dağılım yok):
+
+| vaka | mean | fg-bg L1 | sonuç |
+|---|---|---|---|
+| `small_garment_3pct` | 0.0235 | 366 | kabul, CLIP shirt 0.655 |
+| `small_garment_5pct` | 0.0417 | 366 | kabul, CLIP shirt 0.437 |
+| `tiny_garment_distant` | 0.0104 | yüksek | `garment_too_small` |
+| `yolo_empty_blank_scene` | 0.0405 | 90 | `cutout_failed` (leftover) |
+| `empty_wood_floor` | 0.0033 | 20 | `cutout_failed` |
+
+Eşikler `_SMALL_ACCEPT_MEAN=0.022` ve `_FG_BG_L1_MIN=150` yalnız bu tabloya göre seçildi. Açık renkli giysi + açık zemin (L1<150) hâlâ `cutout_failed` kalabilir.

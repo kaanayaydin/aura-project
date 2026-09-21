@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import app.aura.backend.repository.UserRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.security.JwtService;
 import app.aura.backend.service.VisionGarmentClient;
+import app.aura.backend.support.PngBombs;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.awt.Color;
@@ -416,6 +418,27 @@ class WardrobeControllerTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.rejected_reason").value("empty_mask"));
 
+        assertThat(wardrobeItemRepository.findByUserId(user.getId())).isEmpty();
+    }
+
+    @Test
+    void createItem_decompressionBombHeader_returns413AndDoesNotCallVision() throws Exception {
+        User user = userRepository.save(new User(
+                "bomb-" + System.nanoTime(),
+                "bomb-" + System.nanoTime() + "@aura.app"));
+        String bombB64 = Base64.getEncoder().encodeToString(PngBombs.declaredSize(30_000, 30_000));
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"shirt","imageBase64":"%s"}
+                                """.formatted(bombB64)))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.rejected_reason").value("image_too_large"))
+                .andExpect(jsonPath("$.title").value("Gorsel cok buyuk"));
+
+        verify(visionGarmentClient, never()).normalizeGarmentPng(any(), any(), anyBoolean());
         assertThat(wardrobeItemRepository.findByUserId(user.getId())).isEmpty();
     }
 

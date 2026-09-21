@@ -50,13 +50,24 @@ def alpha_bbox(rgba: Image.Image, *, alpha_threshold: int = 16) -> Tuple[int, in
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
-def has_meaningful_alpha(rgba: Image.Image, *, min_transparent_ratio: float = 0.02) -> bool:
+def has_meaningful_alpha(
+    rgba: Image.Image,
+    *,
+    min_transparent_ratio: float = 0.02,
+    min_opaque_ratio: float = 0.02,
+) -> bool:
+    """En az biraz şeffaf kenar + biraz opak giysi.
+
+    min_opaque_ratio 0.05 idi; 3–5% kare dolduran meşru giysiyi cutout_failed
+    yapıyordu. 0.02, refine boş-maske tabanı ve SMALL_ACCEPT_MEAN ile hizalı
+    (3% mavi gömlek mean=0.0235 bu koşu — dağılım doğrulanmadı).
+    """
     if rgba.mode != "RGBA":
         return False
     alpha = np.asarray(rgba.split()[-1])
     transparent = (alpha < 16).mean()
     opaque = (alpha > 200).mean()
-    return bool(transparent >= min_transparent_ratio and opaque >= 0.05)
+    return bool(transparent >= min_transparent_ratio and opaque >= min_opaque_ratio)
 
 
 def _border_opaque_ratio(alpha: np.ndarray, *, thr: int = 127) -> float:
@@ -222,19 +233,70 @@ def is_low_confidence_mask(alpha: np.ndarray) -> bool:
     return False
 
 
-def unusable_mask_reason(cut: Image.Image) -> str | None:
-    """Bos / carsaf maske — CLIP'e ve dolaba yazma.
+MSG_CUTOUT_FAILED = (
+    "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin"
+)
+MSG_GARMENT_TOO_SMALL = (
+    "Kıyafet fotoğrafta çok küçük görünüyor, lütfen daha yakından çekin"
+)
 
-    opaque_px<200 → empty_mask; is_low_confidence_mask → cutout_failed.
+# mean>=0.06 mevcut kabul bandı. 3% mavi gömlek bu koşuda mean=0.0235 / L1=366;
+# blank_scene leftover mean=0.0405 / L1=90. Bu iki sınıfa göre seçildi, dağılım yok.
+_SMALL_ACCEPT_MEAN = 0.022
+_FG_BG_L1_MIN = 150.0
+
+
+def _foreground_background_l1(cut: Image.Image) -> float:
+    """Opak RGB vs şeffaf RGB (chroma RGB'yi bırakır). Düşük = leftover zemin."""
+    arr = np.asarray(cut.convert("RGBA"), dtype=np.float32)
+    opaque = arr[:, :, 3] > 127
+    if not opaque.any() or opaque.all():
+        return 0.0
+    fg = arr[opaque, :3].mean(axis=0)
+    bg = arr[~opaque, :3].mean(axis=0)
+    return float(np.abs(fg - bg).sum())
+
+
+def unusable_user_message(reason: str) -> str:
+    if reason == "garment_too_small":
+        return MSG_GARMENT_TOO_SMALL
+    return MSG_CUTOUT_FAILED
+
+
+def unusable_mask_reason(cut: Image.Image) -> str | None:
+    """Bos / carsaf / çok küçük maske — CLIP'e ve dolaba yazma.
+
+    opaque_px<200 → empty_mask
+    çarşaf (mean>0.80 / border>0.30 / merkez zayıf) → cutout_failed
+    mean>=0.06 → kabul
+    mean<0.06 ve yüksek fg-bg L1:
+      mean>=0.022 → kabul (3–8% meşru giysi)
+      aksi → garment_too_small
+    düşük L1 leftover → cutout_failed (blank_scene)
     """
     if cut.mode != "RGBA":
         return "empty_mask"
     alpha = np.asarray(cut.split()[-1], dtype=np.uint8)
-    if int((alpha > 127).sum()) < 200:
+    opaque = alpha > 127
+    opaque_px = int(opaque.sum())
+    if opaque_px < 200:
         return "empty_mask"
-    if is_low_confidence_mask(alpha):
+    stats = mask_opaque_stats(alpha)
+    if stats["mean_opaque"] > 0.80:
         return "cutout_failed"
-    return None
+    if stats["border_opaque"] > 0.30:
+        return "cutout_failed"
+    if stats["center_opaque"] < 0.15 and stats["mean_opaque"] > 0.4:
+        return "cutout_failed"
+    mean_op = stats["mean_opaque"]
+    if mean_op >= 0.06:
+        return None
+    delta = _foreground_background_l1(cut)
+    if delta >= _FG_BG_L1_MIN:
+        if mean_op >= _SMALL_ACCEPT_MEAN:
+            return None
+        return "garment_too_small"
+    return "cutout_failed"
 
 
 def boost_contrast(rgb: Image.Image, *, factor: float = 1.75) -> Image.Image:

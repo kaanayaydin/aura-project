@@ -31,6 +31,7 @@ from app.services.garment_studio import (
     parse_hex_color,
     refine_garment_alpha,
     unusable_mask_reason,
+    unusable_user_message,
 )
 
 
@@ -191,10 +192,7 @@ class GarmentNormalizer:
         reject = unusable_mask_reason(cutout)
         if reject:
             logger.info("Normalize reddedildi: %s (bos/carsaf tuval yazilmayacak)", reject)
-            msg = (
-                "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin"
-            )
-            raise UnusableCutoutError(reject, msg)
+            raise UnusableCutoutError(reject, unusable_user_message(reject))
 
         aspect_key = (aspect or settings.studio_aspect or "3:4").strip()
         if aspect_key not in ("3:4", "1:1"):

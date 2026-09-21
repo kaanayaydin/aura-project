@@ -237,6 +237,55 @@ def test_normalize_endpoint_empty_wall_returns_422():
     assert "sade bir zeminde" in detail["user_message"]
 
 
+def test_normalize_endpoint_small_garment_returns_200():
+    """%3 meşru giysi — 422 değil 200."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    raw = (
+        Path(__file__).resolve().parent
+        / "golden_set"
+        / "category"
+        / "images"
+        / "small_garment_3pct.png"
+    ).read_bytes()
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/normalize-garment",
+        files={"file": ("small.png", raw, "image/png")},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "success"
+    assert len(body["image_base64"]) > 32
+
+
+def test_normalize_endpoint_tiny_garment_returns_422_too_small():
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    raw = (
+        Path(__file__).resolve().parent
+        / "golden_set"
+        / "category"
+        / "images"
+        / "tiny_garment_distant.png"
+    ).read_bytes()
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/normalize-garment",
+        files={"file": ("tiny.png", raw, "image/png")},
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["rejected_reason"] == "garment_too_small"
+    assert "daha yakından" in detail["user_message"]
+
+
 def _rgba_shirt_with_hanger(size=(160, 220)) -> Image.Image:
     """Tişört + üstte ince askı çubuğu (yaka dışına taşan)."""
     img = Image.new("RGBA", size, (0, 0, 0, 0))

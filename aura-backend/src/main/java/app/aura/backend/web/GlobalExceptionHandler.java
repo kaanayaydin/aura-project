@@ -40,6 +40,18 @@ public class GlobalExceptionHandler {
         return detail;
     }
 
+    @ExceptionHandler(ImageTooLargeException.class)
+    public ProblemDetail handleImageTooLarge(ImageTooLargeException exception) {
+        ProblemDetail detail = problem(
+                HttpStatus.PAYLOAD_TOO_LARGE,
+                "Gorsel cok buyuk",
+                exception.getMessage());
+        detail.setProperty("rejected_reason", exception.getRejectedReason());
+        detail.setProperty("width", exception.getWidth());
+        detail.setProperty("height", exception.getHeight());
+        return detail;
+    }
+
     @ExceptionHandler(InvalidOccasionException.class)
     public ProblemDetail handleInvalidOccasion(InvalidOccasionException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Gecersiz etkinlik baglami", exception.getMessage());

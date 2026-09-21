@@ -52,6 +52,9 @@ USER_MSG_BELOW_THRESHOLD = (
 USER_MSG_CUTOUT_FAILED = (
     "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin"
 )
+USER_MSG_GARMENT_TOO_SMALL = (
+    "Kıyafet fotoğrafta çok küçük görünüyor, lütfen daha yakından çekin"
+)
 USER_MSG_NO_DETECTION = USER_MSG_BELOW_THRESHOLD
 
 # Yazma isini arka plana almak icin kullanilan zamanlayici imzasi:
@@ -212,6 +215,7 @@ class ImageAnalyzer:
                 "no_detection": USER_MSG_NO_DETECTION,
                 "empty_image": USER_MSG_CUTOUT_FAILED,
                 "empty_mask": USER_MSG_CUTOUT_FAILED,
+                "garment_too_small": USER_MSG_GARMENT_TOO_SMALL,
             }.get(rejected_reason, USER_MSG_BELOW_THRESHOLD)
 
         return ImageAnalysisResult(

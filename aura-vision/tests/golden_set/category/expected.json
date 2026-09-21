@@ -1,9 +1,12 @@
 {
-  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kapılar: opaque_px<200 → empty_mask; is_low_confidence_mask mean_opaque<0.06 (veya >0.80 / border>0.30) → cutout_failed. 0.06–0.80 arası eski merkez-elips (~0.38) CLIP'e gidiyordu; refine artık boş maskede elips uydurmaz. CLIP etiketleri chroma (rembg kapalı) üzerinde kilitli. CLIP yoksa CLIP-gerektiren vakalar skip+uyarı (FAIL değil). Kıyafet-dışı yapılı nesne FP'leri (daire/kutu/kupa) known_failure — 9 etiket, negatif sınıf yok; top1-top2 gap bu turda uygulanmadı (gerçek shirt/t-shirt kardeş boşluğu da küçük).",
+  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kapılar: opaque_px<200 → empty_mask; çarşaf → cutout_failed; mean<0.06 ve fg-bg L1>=150 ise mean>=0.022 kabul (3–5% giysi), aksi garment_too_small; düşük L1 leftover → cutout_failed. has_meaningful_alpha min_opaque 0.02 (eski 0.05 3–5% giysiyi kesiyordu). CLIP yoksa skip+uyarı.",
   "foreground_gates": {
     "empty_mask_min_opaque_px": 200,
     "low_confidence_mean_opaque_min": 0.06,
-    "low_confidence_mean_opaque_max": 0.80
+    "low_confidence_mean_opaque_max": 0.80,
+    "small_accept_mean_opaque": 0.022,
+    "fg_bg_l1_min": 150.0,
+    "has_meaningful_min_opaque": 0.02
   },
   "cases": [
     {
@@ -153,6 +156,38 @@
       "expected_category": null,
       "expected_rejected_reason": "below_threshold",
       "notes": "Sarı üçgen bu koşuda shirt 0.29 < backend_min 0.30 → below_threshold (FP değil). Dağılım doğrulanmadı; CLIP kayarsa known_failure'a çevrilebilir."
+    },
+    {
+      "id": "small_garment_3pct",
+      "file": "images/small_garment_3pct.png",
+      "kind": "synthetic_small_garment",
+      "profile": "small_but_real",
+      "needs_clip": true,
+      "expected_category": "shirt",
+      "acceptable_categories": ["shirt", "t-shirt"],
+      "expected_rejected_reason": null,
+      "notes": "Kare ~%3 mavi gömlek. Eski 0.05 opaque kapısı 422 kesiyordu; bu koşu mean=0.0235 L1=366 → 200. Yalnız bu PNG."
+    },
+    {
+      "id": "small_garment_5pct",
+      "file": "images/small_garment_5pct.png",
+      "kind": "synthetic_small_garment",
+      "profile": "small_but_real",
+      "needs_clip": true,
+      "expected_category": "shirt",
+      "acceptable_categories": ["shirt", "t-shirt"],
+      "expected_rejected_reason": null,
+      "notes": "Kare ~%5. Bu koşu mean=0.0417 CLIP shirt~0.44."
+    },
+    {
+      "id": "tiny_garment_distant",
+      "file": "images/tiny_garment_distant.png",
+      "kind": "synthetic_small_garment",
+      "profile": "too_small",
+      "needs_clip": false,
+      "expected_category": null,
+      "expected_rejected_reason": "garment_too_small",
+      "notes": "~%1.5 mavi gömlek mean=0.0104 L1 yüksek → garment_too_small (CLIP yok)."
     }
   ]
 }
