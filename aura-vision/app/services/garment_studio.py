@@ -289,15 +289,10 @@ def refine_garment_alpha(
         alpha = keep_largest_opaque_component(alpha)
         alpha = _force_border_transparent(alpha, margin=2)
 
-    # Bos maske guvenlik agi: merkez kutuyu yumusak foreground yap (carsaf yerine)
+    # Bos maske: silüet UYDURMA. Eski merkez-elips fallback boş sahnede
+    # mean_opaque~0.38 üretip 0.06–0.80 kapısını geçiriyor, CLIP "dress" FP.
     if (alpha > 127).mean() < 0.02:
-        logger.warning("Refine sonrasi maske bos — merkez elips fallback")
-        h, w = alpha.shape
-        yy, xx = np.ogrid[:h, :w]
-        cy, cx = h / 2.0, w / 2.0
-        ry, rx = h * 0.38, w * 0.32
-        ellipse = ((yy - cy) / max(ry, 1)) ** 2 + ((xx - cx) / max(rx, 1)) ** 2 <= 1.0
-        alpha = np.where(ellipse, 255, 0).astype(np.uint8)
+        logger.warning("Refine sonrasi maske bos — elips uydurulmadi")
 
     out = rgba.copy()
     alpha = np.asarray(alpha, dtype=np.uint8)

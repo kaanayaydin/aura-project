@@ -139,6 +139,27 @@ export PYTHONPATH=.
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
+**Vision tests / CLIP cache (CI)**
+
+Kategori golden-set (`tests/test_golden_set_category.py`) gerçek CLIP (`openai/clip-vit-base-patch32`) ister. Ağırlık yoksa bu vakalar **FAIL olmaz**; skip edilir ve oturum sonunda sarı uyarı çıkar: `N test CLIP modeli bulunamadığı için atlandı`. Boş-sahne red testleri CLIP indirmez.
+
+Önbellek dizini: `aura-vision/models/huggingface` (`AURA_MODEL_DIR` altı). CI’da bir kez indirip cache restore edin:
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: aura-vision/models/huggingface
+    key: clip-vit-base-patch32-${{ hashFiles('aura-vision/requirements.txt') }}
+- name: Ensure CLIP weights
+  working-directory: aura-vision
+  run: |
+    python -m venv .venv
+    .venv/bin/pip install -r requirements.txt
+    PYTHONPATH=. .venv/bin/python -c "from app.services.style_classifier import style_classifier; style_classifier.load()"
+```
+
+Yerel ön-indirme: `cd aura-vision && PYTHONPATH=. .venv/bin/python -c "from app.services.style_classifier import style_classifier; style_classifier.load()"`
+
 **VTON (mock — no GPU weights required)**
 
 ```bash

@@ -1,10 +1,7 @@
 """YOLO-boş full-frame fallback kategori golden-set (CI).
 
-Önceki kapsama: tests/test_category_fallback.py — 1 sentetik tee (mock CLIP),
-1 below_threshold, 1 mock boş-maske. Golden-set/category altında vaka yoktu.
-
-Bu dosya gerçek cutout (chroma; rembg conftest ile kapalı) + gerçek CLIP ile
-çeşitli profilleri kilitler. YOLO her zaman boş mock (fallback yolu zorunlu).
+CLIP gereken vakalar: gerçek CLIP. CLIP yoksa skip + görünür uyarı (FAIL değil).
+Red vakaları (empty_mask / cutout_failed) CLIP indirmez; CLIP çağrılırsa fail.
 """
 
 from __future__ import annotations
@@ -18,13 +15,18 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from app.core.exceptions import ModelUnavailableError
 from app.services.garment_normalizer import garment_normalizer
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.style_classifier import style_classifier
+from tests.clip_guard import (
+    CLIP_SKIP_REASON,
+    ClipModelMissingWarning,
+    load_clip_or_warn_skip,
+)
 
 ROOT = Path(__file__).resolve().parent / "golden_set" / "category"
 EXPECTED = json.loads((ROOT / "expected.json").read_text(encoding="utf-8"))
-# is_low_confidence_mask(mean_opaque < 0.06) — kullanıcı dilindeki MIN_FOREGROUND_RATIO
 _MIN_FOREGROUND = EXPECTED["foreground_gates"]["low_confidence_mean_opaque_min"]
 
 
@@ -35,13 +37,19 @@ class _EmptyYolo:
         return []
 
 
+class _ClipMustNotRun:
+    model_name = "clip-must-not-run"
+
+    def classify_detailed(self, images):
+        raise AssertionError("CLIP bos-sahne reddinde cagrilmamali")
+
+    def classify(self, images):
+        raise AssertionError("CLIP bos-sahne reddinde cagrilmamali")
+
+
 @pytest.fixture(scope="session")
 def _clip():
-    try:
-        style_classifier.load()
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"CLIP yuklenemedi: {exc}")
-    return style_classifier
+    return load_clip_or_warn_skip()
 
 
 def _mean_opaque(result, raw: bytes) -> float:
@@ -56,16 +64,47 @@ def _mean_opaque(result, raw: bytes) -> float:
     return float((alpha > 127).mean())
 
 
+def test_clip_unavailable_emits_visible_warning(monkeypatch):
+    """CLIP yoksa sessiz skip değil — ClipModelMissingWarning + skip reason."""
+    monkeypatch.setattr(
+        type(style_classifier),
+        "load",
+        lambda self: (_ for _ in ()).throw(ModelUnavailableError("yok")),
+    )
+    with pytest.warns(ClipModelMissingWarning, match="CLIP modeli bulunamad"):
+        with pytest.raises(pytest.skip.Exception, match=CLIP_SKIP_REASON):
+            load_clip_or_warn_skip()
+
+
 @pytest.mark.parametrize(
     "case",
     EXPECTED["cases"],
     ids=[c["id"] for c in EXPECTED["cases"]],
 )
-def test_yolo_empty_fallback_golden_category(case, _clip):
+def test_yolo_empty_fallback_golden_category(case, request):
     path = ROOT / case["file"]
     raw = path.read_bytes()
-    analyzer = ImageAnalyzer(detector=_EmptyYolo(), classifier=_clip)
+
+    if case.get("known_failure"):
+        cut, _src = garment_normalizer._cutout(
+            Image.open(BytesIO(raw)), prefer_rembg=True
+        )
+        alpha = np.asarray(cut.convert("RGBA").split()[-1])
+        mean_op = float((alpha > 127).mean())
+        lo, hi = case["mean_opaque_range"]
+        assert lo <= mean_op < hi, (case["id"], mean_op, case.get("known_issue_note"))
+        assert ImageAnalyzer._empty_or_unusable_mask_reason(cut) is case.get(
+            "expected_empty_reason"
+        ), (case["id"], "geometrik kapı bu çarşaf-duvarı hâlâ kıyafet sanıyor")
+        return
+
+    if case.get("needs_clip"):
+        clip = request.getfixturevalue("_clip")
+        analyzer = ImageAnalyzer(detector=_EmptyYolo(), classifier=clip)
+    else:
+        analyzer = ImageAnalyzer(detector=_EmptyYolo(), classifier=_ClipMustNotRun())
     result = analyzer.analyze(raw, path.name, debug=False, job_id=case["id"][:12])
+    mean_op = _mean_opaque(result, raw)
 
     categorized = [item for item in result.detected_items if item.category]
     want_cat = case.get("expected_category")
@@ -87,7 +126,6 @@ def test_yolo_empty_fallback_golden_category(case, _clip):
         assert not categorized, (case["id"], [i.category for i in result.detected_items])
         assert result.rejected_reason == want_reason, (case["id"], result.rejected_reason)
 
-    mean_op = _mean_opaque(result, raw)
     if case.get("expect_near_min_foreground"):
         lo, hi = case["mean_opaque_range"]
         assert lo <= mean_op < hi, (

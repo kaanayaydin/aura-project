@@ -85,6 +85,47 @@ def pants() -> Image.Image:
     return img
 
 
+def empty_wall_flat(size=(320, 420)) -> Image.Image:
+    return Image.new("RGB", size, (214, 206, 196))
+
+
+def empty_wall_noise(size=(320, 420)) -> Image.Image:
+    w, h = size
+    rng = np.random.default_rng(21)
+    base = np.full((h, w, 3), (201, 196, 188), dtype=np.int16)
+    noise = rng.integers(-14, 15, size=base.shape)
+    img = Image.fromarray(np.clip(base + noise, 0, 255).astype(np.uint8), "RGB")
+    return img.filter(ImageFilter.GaussianBlur(0.6))
+
+
+def empty_wood_floor(size=(320, 420)) -> Image.Image:
+    w, h = size
+    wood = np.zeros((h, w, 3), dtype=np.uint8)
+    rng = np.random.default_rng(9)
+    for y in range(h):
+        t = (y % 28) / 28.0
+        plank = 0.85 + 0.15 * np.sin(y / 5.5)
+        r = int(np.clip(118 + 40 * t * plank, 0, 255))
+        g = int(np.clip(78 + 28 * t * plank, 0, 255))
+        b = int(np.clip(42 + 16 * t * plank, 0, 255))
+        wood[y, :, :] = (r, g, b)
+        if y % 28 == 0:
+            wood[y, :, :] = np.clip(wood[y, :, :].astype(int) - 25, 0, 255)
+    wood = np.clip(wood.astype(np.int16) + rng.integers(-6, 7, size=wood.shape), 0, 255).astype(
+        np.uint8
+    )
+    return Image.fromarray(wood, "RGB")
+
+
+def empty_gradient(size=(320, 420)) -> Image.Image:
+    w, h = size
+    grad = np.zeros((h, w, 3), dtype=np.uint8)
+    for y in range(h):
+        t = y / max(h - 1, 1)
+        grad[y, :, :] = (int(188 + 40 * t), int(184 + 28 * t), int(176 + 18 * t))
+    return Image.fromarray(grad, "RGB")
+
+
 def _mask_stats(cut: Image.Image | None) -> dict:
     from app.services.garment_studio import is_low_confidence_mask, mask_opaque_stats
     from app.services.image_analyzer import ImageAnalyzer
@@ -151,6 +192,10 @@ def main() -> None:
         "yolo_empty_borderline_fg.png": borderline_fg(),
         "yolo_empty_blank_scene.png": blank_scene(),
         "yolo_empty_pants.png": pants(),
+        "empty_wall_flat.png": empty_wall_flat(),
+        "empty_wall_noise.png": empty_wall_noise(),
+        "empty_wood_floor.png": empty_wood_floor(),
+        "empty_gradient.png": empty_gradient(),
     }
     paths = [_save(name, img) for name, img in files.items()]
     extra = ROOT / "tests" / "golden_set" / "orientation" / "images" / "askisiz_perspektif_golge.png"

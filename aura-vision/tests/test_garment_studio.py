@@ -144,6 +144,19 @@ def test_refine_low_confidence_full_opaque_sheet_clears_border():
     assert (alpha > 127).mean() > 0.05  # tamamen bos degil
 
 
+def test_refine_empty_mask_does_not_invent_ellipse():
+    """Boş maske silüet uydurmaz (eski merkez-elips → CLIP dress FP)."""
+    from app.services.garment_studio import chroma_cutout, refine_garment_alpha
+
+    empty = Image.new("RGBA", (80, 100), (12, 12, 12, 0))
+    out = refine_garment_alpha(empty, force_aggressive=True)
+    assert int((np.asarray(out.split()[-1]) > 127).sum()) == 0
+
+    wall = Image.new("RGB", (80, 100), (214, 206, 196))
+    cut = chroma_cutout(wall)
+    assert int((np.asarray(cut.split()[-1]) > 127).sum()) == 0
+
+
 def test_normalizer_rgb_fallback_produces_studio():
     rgb = Image.new("RGB", (160, 200), (230, 230, 230))
     for y in range(40, 160):
