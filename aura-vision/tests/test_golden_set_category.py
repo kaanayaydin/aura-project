@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import re
+import subprocess
+import sys
 from io import BytesIO
 from pathlib import Path
 
@@ -20,9 +24,11 @@ from app.services.garment_normalizer import garment_normalizer
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.style_classifier import style_classifier
 from tests.clip_guard import (
+    CLIP_BANNER_FMT,
     CLIP_SKIP_REASON,
     ClipModelMissingWarning,
     load_clip_or_warn_skip,
+    write_clip_skip_summary,
 )
 
 ROOT = Path(__file__).resolve().parent / "golden_set" / "category"
@@ -76,6 +82,63 @@ def test_clip_unavailable_emits_visible_warning(monkeypatch):
             load_clip_or_warn_skip()
 
 
+_BANNER_RE = re.compile(r"\d+ test CLIP modeli bulunamadığı için atlandı")
+
+
+def test_clip_skip_summary_hook_writes_banner():
+    """Hook doğrudan: 1 skip → bant başlığı."""
+
+    class _Rep:
+        longrepr = CLIP_SKIP_REASON
+
+    class _TR:
+        def __init__(self):
+            self.lines: list[str] = []
+
+        def write_sep(self, sep, title, **kwargs):
+            self.lines.append(title)
+
+        def write_line(self, text):
+            self.lines.append(text)
+
+    tr = _TR()
+    n = write_clip_skip_summary(tr, [_Rep()])
+    assert n == 1
+    assert CLIP_BANNER_FMT.format(n=1) in tr.lines
+
+
+def test_clip_skip_banner_appears_in_real_pytest_stdout():
+    """Gerçek pytest oturumu: conftest hook stdout'ta 'N test CLIP...' basar.
+
+    Skip nedeni CLIP_SKIP_REASON ile bant aynı cümleyi paylaşır; kilidi
+    ``\\d+ test CLIP...`` öneki (yalnızca hook) sağlar. Hook silinirse FAIL.
+    """
+    probe = Path(__file__).resolve().parent / "clip_skip_probe.py"
+    root = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(probe),
+            "-v",
+            "--tb=no",
+            "-p",
+            "no:cacheprovider",
+        ],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(root)},
+        check=False,
+    )
+    out = (proc.stdout or "") + (proc.stderr or "")
+    assert proc.returncode == 0, out
+    assert _BANNER_RE.search(out), (
+        "Oturum-sonu CLIP bandı yok (hook bozulmuş olabilir):\n" + out[-2000:]
+    )
+
+
 @pytest.mark.parametrize(
     "case",
     EXPECTED["cases"],
@@ -86,6 +149,30 @@ def test_yolo_empty_fallback_golden_category(case, request):
     raw = path.read_bytes()
 
     if case.get("known_failure"):
+        if case.get("needs_clip"):
+            clip = request.getfixturevalue("_clip")
+            analyzer = ImageAnalyzer(detector=_EmptyYolo(), classifier=clip)
+            result = analyzer.analyze(
+                raw, path.name, debug=False, job_id=case["id"][:12]
+            )
+            categorized = [item for item in result.detected_items if item.category]
+            want_cat = case.get("expected_category")
+            allowed = case.get("acceptable_categories") or (
+                [want_cat] if want_cat else []
+            )
+            assert categorized, (
+                case["id"],
+                result.rejected_reason,
+                "known_failure kilit: CLIP hâlâ kıyafet FP vermeli; "
+                "kök neden düzeldiyse bu vaka beklenen red'e çevrilir",
+            )
+            assert categorized[0].category in allowed, (
+                case["id"],
+                categorized[0].category,
+                allowed,
+                case.get("known_issue_note"),
+            )
+            return
         cut, _src = garment_normalizer._cutout(
             Image.open(BytesIO(raw)), prefer_rembg=True
         )

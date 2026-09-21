@@ -9,7 +9,9 @@ import app.aura.backend.repository.UserRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.service.StorageService.Purpose;
 import app.aura.backend.support.Base64Images;
+import app.aura.backend.support.ImageForeground;
 import app.aura.backend.web.InvalidImagePayloadException;
+import app.aura.backend.web.UnusableGarmentException;
 import app.aura.backend.web.UserNotFoundException;
 import app.aura.backend.web.WardrobeItemNotFoundException;
 import app.aura.backend.web.WardrobeOwnershipException;
@@ -115,6 +117,12 @@ public class WardrobeService {
                     sourceBytes.length,
                     sourceMime,
                     skipOrientation);
+        }
+
+        if (ImageForeground.isBlankCanvas(finalBytes)) {
+            throw new UnusableGarmentException(
+                    "empty_mask",
+                    "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin");
         }
 
         if (finalMime == null || finalMime.isBlank()) {

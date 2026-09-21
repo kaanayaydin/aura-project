@@ -20,8 +20,13 @@ import app.aura.backend.security.JwtService;
 import app.aura.backend.service.VisionGarmentClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.Optional;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -370,6 +375,59 @@ class WardrobeControllerTest {
                 .andExpect(status().isCreated());
 
         verify(visionGarmentClient, times(1)).normalizeGarmentPng(any(), any(), eq(false));
+    }
+
+    @Test
+    void createItem_visionUnusable_returns422AndDoesNotSave() throws Exception {
+        User user = userRepository.save(new User(
+                "empty-vision-" + System.nanoTime(),
+                "empty-vision-" + System.nanoTime() + "@aura.app"));
+        when(visionGarmentClient.normalizeGarmentPng(any(), any(), anyBoolean()))
+                .thenThrow(new UnusableGarmentException(
+                        "empty_mask", "sade bir zeminde cekin"));
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"shirt","imageBase64":"%s"}
+                                """.formatted(PNG_BASE64)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.rejected_reason").value("empty_mask"))
+                .andExpect(jsonPath("$.title").value("Kiyafet kesilemedi"));
+
+        assertThat(wardrobeItemRepository.findByUserId(user.getId())).isEmpty();
+    }
+
+    @Test
+    void createItem_blankCanvasBypassingAnalyze_returns422() throws Exception {
+        User user = userRepository.save(new User(
+                "empty-src-" + System.nanoTime(),
+                "empty-src-" + System.nanoTime() + "@aura.app"));
+        when(visionGarmentClient.normalizeGarmentPng(any(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/api/v1/wardrobe/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"shirt","imageBase64":"%s"}
+                                """.formatted(solidPngBase64(new Color(214, 206, 196)))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.rejected_reason").value("empty_mask"));
+
+        assertThat(wardrobeItemRepository.findByUserId(user.getId())).isEmpty();
+    }
+
+    private static String solidPngBase64(Color color) throws Exception {
+        BufferedImage image = new BufferedImage(64, 80, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setColor(color);
+        graphics.fillRect(0, 0, 64, 80);
+        graphics.dispose();
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", buffer);
+        return Base64.getEncoder().encodeToString(buffer.toByteArray());
     }
 
     private Long createItem(User user, String category) throws Exception {

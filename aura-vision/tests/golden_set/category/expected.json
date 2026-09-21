@@ -1,5 +1,5 @@
 {
-  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kapılar: opaque_px<200 → empty_mask; is_low_confidence_mask mean_opaque<0.06 (veya >0.80 / border>0.30) → cutout_failed. 0.06–0.80 arası eski merkez-elips (~0.38) CLIP'e gidiyordu; refine artık boş maskede elips uydurmaz. CLIP etiketleri chroma (rembg kapalı) üzerinde kilitli. CLIP yoksa CLIP-gerektiren vakalar skip+uyarı (FAIL değil).",
+  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kapılar: opaque_px<200 → empty_mask; is_low_confidence_mask mean_opaque<0.06 (veya >0.80 / border>0.30) → cutout_failed. 0.06–0.80 arası eski merkez-elips (~0.38) CLIP'e gidiyordu; refine artık boş maskede elips uydurmaz. CLIP etiketleri chroma (rembg kapalı) üzerinde kilitli. CLIP yoksa CLIP-gerektiren vakalar skip+uyarı (FAIL değil). Kıyafet-dışı yapılı nesne FP'leri (daire/kutu/kupa) known_failure — 9 etiket, negatif sınıf yok; top1-top2 gap bu turda uygulanmadı (gerçek shirt/t-shirt kardeş boşluğu da küçük).",
   "foreground_gates": {
     "empty_mask_min_opaque_px": 200,
     "low_confidence_mean_opaque_min": 0.06,
@@ -106,6 +106,53 @@
       "expected_empty_reason": null,
       "mean_opaque_range": [0.50, 0.80],
       "known_issue_note": "Polarite ters çevirip çarşaf-benzeri maske (mean~0.68). 0.06–0.80 kapısı kıyafet sanır. 0.80 düşürülmez: askisiz_perspektif_golge mean=0.617. CLIP bu koşuda below_threshold olabilir veya dress FP — geometrik delik duruyor."
+    },
+    {
+      "id": "nongarment_red_circle",
+      "file": "images/nongarment_red_circle.png",
+      "kind": "synthetic_structured_nongarment",
+      "profile": "non_garment_object",
+      "needs_clip": true,
+      "known_failure": true,
+      "expected_category": "shirt",
+      "acceptable_categories": ["shirt", "t-shirt", "dress"],
+      "expected_rejected_reason": null,
+      "known_issue_note": "Kırmızı daire → CLIP shirt ~0.37 (bu koşu). B2 boş-sahneden farklı: nesne kesilir, 9 etiketten biri kazanır. Gap 0.08; gerçek borderline shirt gap 0.056 — gap reddi kıyafeti de düşürür."
+    },
+    {
+      "id": "nongarment_blue_box",
+      "file": "images/nongarment_blue_box.png",
+      "kind": "synthetic_structured_nongarment",
+      "profile": "non_garment_object",
+      "needs_clip": true,
+      "known_failure": true,
+      "expected_category": "pants",
+      "acceptable_categories": ["pants"],
+      "expected_rejected_reason": null,
+      "known_issue_note": "Mavi kutu → pants ~0.40, gap ~0.24 (bu koşu). Model yanlış ama kararlı; top1-top2 gap bu FP'yi yakalamaz."
+    },
+    {
+      "id": "nongarment_mug",
+      "file": "images/nongarment_mug.png",
+      "kind": "synthetic_structured_nongarment",
+      "profile": "non_garment_object",
+      "needs_clip": true,
+      "known_failure": true,
+      "expected_category": "pants",
+      "acceptable_categories": ["pants", "glasses", "shirt"],
+      "expected_rejected_reason": null,
+      "known_issue_note": "Kupa silüeti → pants ~0.38, gap ~0.23 (bu koşu). Ev eşyası FP sınıfı; gap eşiği uygulanmadı."
+    },
+    {
+      "id": "nongarment_yellow_triangle",
+      "file": "images/nongarment_yellow_triangle.png",
+      "kind": "synthetic_structured_nongarment",
+      "profile": "non_garment_object",
+      "needs_clip": true,
+      "known_failure": false,
+      "expected_category": null,
+      "expected_rejected_reason": "below_threshold",
+      "notes": "Sarı üçgen bu koşuda shirt 0.29 < backend_min 0.30 → below_threshold (FP değil). Dağılım doğrulanmadı; CLIP kayarsa known_failure'a çevrilebilir."
     }
   ]
 }

@@ -30,7 +30,17 @@ from app.services.garment_studio import (
     is_low_confidence_mask,
     parse_hex_color,
     refine_garment_alpha,
+    unusable_mask_reason,
 )
+
+
+class UnusableCutoutError(ValueError):
+    """Cutout bos/carsaf — HTTP 422 rejected_reason."""
+
+    def __init__(self, rejected_reason: str, user_message: str):
+        self.rejected_reason = rejected_reason
+        self.user_message = user_message
+        super().__init__(rejected_reason)
 
 logger = logging.getLogger("aura.vision.normalize")
 
@@ -177,6 +187,14 @@ class GarmentNormalizer:
                 )
             except Exception:
                 logger.exception("Studio polish basarisiz — ham cutout ile framing")
+
+        reject = unusable_mask_reason(cutout)
+        if reject:
+            logger.info("Normalize reddedildi: %s (bos/carsaf tuval yazilmayacak)", reject)
+            msg = (
+                "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin"
+            )
+            raise UnusableCutoutError(reject, msg)
 
         aspect_key = (aspect or settings.studio_aspect or "3:4").strip()
         if aspect_key not in ("3:4", "1:1"):

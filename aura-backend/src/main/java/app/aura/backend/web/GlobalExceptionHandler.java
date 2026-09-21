@@ -30,6 +30,16 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "Gecersiz gorsel yuku", exception.getMessage());
     }
 
+    @ExceptionHandler(UnusableGarmentException.class)
+    public ProblemDetail handleUnusableGarment(UnusableGarmentException exception) {
+        ProblemDetail detail = problem(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "Kiyafet kesilemedi",
+                exception.getMessage());
+        detail.setProperty("rejected_reason", exception.getRejectedReason());
+        return detail;
+    }
+
     @ExceptionHandler(InvalidOccasionException.class)
     public ProblemDetail handleInvalidOccasion(InvalidOccasionException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Gecersiz etkinlik baglami", exception.getMessage());

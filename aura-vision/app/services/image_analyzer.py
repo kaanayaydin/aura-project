@@ -276,18 +276,9 @@ class ImageAnalyzer:
     @staticmethod
     def _empty_or_unusable_mask_reason(cut: Image.Image) -> Optional[str]:
         """Bos / carsaf maske — CLIP'e gonderme, dolaba yazma."""
-        import numpy as np
+        from app.services.garment_studio import unusable_mask_reason
 
-        from app.services.garment_studio import is_low_confidence_mask
-
-        if cut.mode != "RGBA":
-            return "empty_mask"
-        alpha = np.asarray(cut.split()[-1], dtype=np.uint8)
-        if int((alpha > 127).sum()) < 200:
-            return "empty_mask"
-        if is_low_confidence_mask(alpha):
-            return "cutout_failed"
-        return None
+        return unusable_mask_reason(cut)
 
     @staticmethod
     def _opaque_px(cut: Image.Image) -> int:

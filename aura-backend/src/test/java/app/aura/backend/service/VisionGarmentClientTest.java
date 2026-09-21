@@ -1,16 +1,20 @@
 package app.aura.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import app.aura.backend.config.VisionProperties;
+import app.aura.backend.web.UnusableGarmentException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.http.client.MockClientHttpRequest;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -73,5 +77,23 @@ class VisionGarmentClientTest {
         VisionProperties props = new VisionProperties("http://vision.test", false, 1, 1);
         VisionGarmentClient disabled = new VisionGarmentClient(props, RestClient.create(), new ObjectMapper());
         assertThat(disabled.normalizeGarmentPng(new byte[] {1}, "x.png")).isEmpty();
+    }
+
+    @Test
+    void http422_throwsUnusableGarmentException() {
+        String json = """
+                {"detail":{"rejected_reason":"empty_mask","user_message":"sade bir zeminde cekin"}}
+                """;
+        server.expect(requestTo("http://vision.test/api/v1/vision/normalize-garment"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(json));
+
+        assertThatThrownBy(() -> client.normalizeGarmentPng(new byte[] {1, 2, 3}, "wall.png"))
+                .isInstanceOf(UnusableGarmentException.class)
+                .hasMessageContaining("sade bir zeminde")
+                .satisfies(ex -> assertThat(((UnusableGarmentException) ex).getRejectedReason())
+                        .isEqualTo("empty_mask"));
+        server.verify();
     }
 }

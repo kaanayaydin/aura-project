@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, Header, HTTPExceptio
 from app.core.config import settings
 from app.core.exceptions import ModelUnavailableError
 from app.schemas.vision import AnalyzeResponse, NormalizeGarmentResponse
-from app.services.garment_normalizer import garment_normalizer
+from app.services.garment_normalizer import UnusableCutoutError, garment_normalizer
 from app.services.image_analyzer import (
     InvalidImageError,
     UnsupportedImageFormatError,
@@ -169,6 +169,15 @@ async def normalize_garment(
             debug=bool(debug),
             skip_orientation=skip,
         )
+    except UnusableCutoutError as exc:
+        logger.info("Normalize garment reddedildi: %s", exc.rejected_reason)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "rejected_reason": exc.rejected_reason,
+                "user_message": exc.user_message,
+            },
+        ) from exc
     except ValueError as exc:
         logger.warning("Normalize garment validation: %s", exc)
         raise HTTPException(

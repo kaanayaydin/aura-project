@@ -222,6 +222,21 @@ def is_low_confidence_mask(alpha: np.ndarray) -> bool:
     return False
 
 
+def unusable_mask_reason(cut: Image.Image) -> str | None:
+    """Bos / carsaf maske — CLIP'e ve dolaba yazma.
+
+    opaque_px<200 → empty_mask; is_low_confidence_mask → cutout_failed.
+    """
+    if cut.mode != "RGBA":
+        return "empty_mask"
+    alpha = np.asarray(cut.split()[-1], dtype=np.uint8)
+    if int((alpha > 127).sum()) < 200:
+        return "empty_mask"
+    if is_low_confidence_mask(alpha):
+        return "cutout_failed"
+    return None
+
+
 def boost_contrast(rgb: Image.Image, *, factor: float = 1.75) -> Image.Image:
     """Dusuk kontrast (beyaz/beyaz) icin rembg oncesi kontrast artir."""
     from PIL import ImageEnhance

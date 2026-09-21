@@ -218,6 +218,25 @@ def test_normalize_endpoint_logs_and_returns_200():
     assert len(body["image_base64"]) > 32
 
 
+def test_normalize_endpoint_empty_wall_returns_422():
+    """Boş duvar → çıplak tuval değil; 422 + rejected_reason."""
+    from fastapi.testclient import TestClient
+    from main import app
+
+    wall = Image.new("RGB", (80, 100), (214, 206, 196))
+    buf = io.BytesIO()
+    wall.save(buf, format="PNG")
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/vision/normalize-garment",
+        files={"file": ("wall.png", buf.getvalue(), "image/png")},
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["rejected_reason"] in ("empty_mask", "cutout_failed")
+    assert "sade bir zeminde" in detail["user_message"]
+
+
 def _rgba_shirt_with_hanger(size=(160, 220)) -> Image.Image:
     """Tişört + üstte ince askı çubuğu (yaka dışına taşan)."""
     img = Image.new("RGBA", size, (0, 0, 0, 0))

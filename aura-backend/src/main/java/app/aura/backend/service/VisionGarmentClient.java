@@ -1,6 +1,7 @@
 package app.aura.backend.service;
 
 import app.aura.backend.config.VisionProperties;
+import app.aura.backend.web.UnusableGarmentException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Base64;
@@ -14,6 +15,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * aura-vision garment studio normalize istemcisi.
@@ -109,10 +111,39 @@ public class VisionGarmentClient {
                     root.path("cutout_source").asText("?"),
                     png.length);
             return Optional.of(png);
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 422) {
+                throw parseUnusable(ex);
+            }
+            log.warn("Vision normalize HTTP {}: ham gorsel kullanilacak: {}",
+                    ex.getStatusCode().value(), ex.toString());
+            return Optional.empty();
         } catch (RestClientException | IllegalArgumentException | java.io.IOException ex) {
             log.warn("Vision normalize basarisiz, ham gorsel kullanilacak: {}", ex.toString());
             return Optional.empty();
         }
+    }
+
+    private UnusableGarmentException parseUnusable(RestClientResponseException ex) {
+        String reason = "empty_mask";
+        String message = "Arka planı ayırt edemedik, lütfen daha sade bir zeminde çekin";
+        try {
+            JsonNode root = objectMapper.readTree(ex.getResponseBodyAsString());
+            JsonNode detail = root.path("detail");
+            if (detail.isTextual() && !detail.asText().isBlank()) {
+                message = detail.asText();
+            } else if (detail.isObject()) {
+                if (detail.hasNonNull("rejected_reason")) {
+                    reason = detail.path("rejected_reason").asText(reason);
+                }
+                if (detail.hasNonNull("user_message")) {
+                    message = detail.path("user_message").asText(message);
+                }
+            }
+        } catch (java.io.IOException ignored) {
+            // varsayilan mesaj
+        }
+        return new UnusableGarmentException(reason, message);
     }
 
     private static boolean isPng(byte[] bytes) {
