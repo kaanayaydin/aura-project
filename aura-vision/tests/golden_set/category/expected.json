@@ -1,0 +1,63 @@
+{
+  "notes": "YOLO-boş full-frame CLIP fallback golden-set. Kodda MIN_FOREGROUND_RATIO adlı sabit yok; kapılar: opaque_px<200 → empty_mask; is_low_confidence_mask mean_opaque<0.06 (veya >0.80 / border>0.30) → cutout_failed. RGB-only boş duvar chroma elips fallback ile dress FP verir — bilinçli olarak sparse-alpha boş vaka kullanıldı (0.06 kapısı). CLIP etiketleri bu PNG'ler + chroma (rembg kapalı) üzerinde ölçüldü (2026-09-21).",
+  "foreground_gates": {
+    "empty_mask_min_opaque_px": 200,
+    "low_confidence_mean_opaque_min": 0.06,
+    "low_confidence_mean_opaque_max": 0.80
+  },
+  "cases": [
+    {
+      "id": "yolo_empty_perspective_shadow_tee",
+      "file": "images/yolo_empty_perspective_shadow_tee.png",
+      "kind": "synthetic_perspective_shadow",
+      "profile": "perspective_shadow_garment",
+      "expected_category": "shirt",
+      "acceptable_categories": ["shirt", "t-shirt"],
+      "expected_rejected_reason": null,
+      "notes": "Yeni sentetik: trapez tişört + gölge + masa zemini. YOLO mock boş; fallback CLIP."
+    },
+    {
+      "id": "askisiz_perspektif_golge",
+      "file": "../orientation/images/askisiz_perspektif_golge.png",
+      "kind": "real_photo",
+      "profile": "perspective_shadow_garment",
+      "expected_category": "shirt",
+      "acceptable_categories": ["shirt", "t-shirt"],
+      "expected_rejected_reason": null,
+      "notes": "Orijinal YOLO-0 üretim hatası fotoğrafı (yaprak gölgesi). Kategori golden'a ilk kez etiketli."
+    },
+    {
+      "id": "yolo_empty_borderline_fg",
+      "file": "images/yolo_empty_borderline_fg.png",
+      "kind": "synthetic_calibration",
+      "profile": "borderline_foreground",
+      "expected_category": "shirt",
+      "acceptable_categories": ["shirt", "t-shirt"],
+      "expected_rejected_reason": null,
+      "expect_near_min_foreground": true,
+      "mean_opaque_range": [0.06, 0.10],
+      "notes": "chroma+refine sonrası mean_opaque=0.0621 (eşik 0.06'nın hemen üstü) → kabul. Bu aralık yalnızca bu PNG'ye göre kilitlendi."
+    },
+    {
+      "id": "yolo_empty_blank_scene",
+      "file": "images/yolo_empty_blank_scene.png",
+      "kind": "synthetic_empty",
+      "profile": "empty_scene",
+      "expected_category": null,
+      "expected_rejected_reason": "cutout_failed",
+      "expect_below_min_foreground": true,
+      "mean_opaque_max": 0.06,
+      "notes": "Kıyafetsiz; seyrek alfa (refine sonrası ~0.038 < 0.06) → cutout_failed. CLIP çağrılmaz."
+    },
+    {
+      "id": "yolo_empty_pants",
+      "file": "images/yolo_empty_pants.png",
+      "kind": "synthetic_non_tee",
+      "profile": "other_category",
+      "expected_category": "pants",
+      "acceptable_categories": ["pants"],
+      "expected_rejected_reason": null,
+      "notes": "Tişört dışı kategori; fallback'in yalnızca tee'de çalışmadığını kilitler."
+    }
+  ]
+}
