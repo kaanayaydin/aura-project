@@ -21,10 +21,16 @@ Bu, üzerinde çalıştığımız zincir — bitmeden hiçbir şeye başlamayın
 
 Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile açmak maliyet riski. Sıra önemli.
 
-### 1a. Production-grade Auth (~1 hafta)
-- [ ] BCrypt parola, register/login/refresh token rotasyonu (zaten şartname var, uygulanmamışsa şimdi bitirin)
-- [ ] Rate limiting (Bucket4j + Redis, IP bazlı)
-- [ ] Brute-force koruması, hesap kilitleme
+### 1a. Production-grade Auth (~1 hafta) ✅ TAMAMLANDI (2026-09-24)
+- [x] BCrypt parola, register/login/refresh token rotasyonu
+      (refresh rotasyonu + replay tespiti gerçek Postgres/HTTP ile
+      doğrulandı, REQUIRES_NEW ile transaction sınırı düzeltildi)
+- [x] Rate limiting (Bucket4j + Redis, IP bazlı, 5/dakika üretim ayarı)
+- [x] Brute-force koruması, hesap kilitleme (5 deneme → 15dk LOCKED,
+      otomatik açılma doğrulandı)
+- [x] JWT secret zorunluluğu (sessiz zayıf varsayılan kaldırıldı,
+      env set edilmezse uygulama başlamıyor)
+- [x] Enumeration-önleme (bilinmeyen email/yanlış şifre aynı mesaj)
 
 ### 1b. Cloud GPU Endpoint (~1 hafta)
 - [ ] RunPod Serverless veya Modal'a VTON worker deploy
