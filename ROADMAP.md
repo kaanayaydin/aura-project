@@ -29,7 +29,7 @@ Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile
 ### 1b. Cloud GPU Endpoint (~1 hafta)
 - [ ] RunPod Serverless veya Modal'a VTON worker deploy
 - [ ] Java tarafında timeout + retry + cold-start toleransı
-- [ ] **Kullanıcı/plan bazlı VTON kota sayacı** — bu, auth'tan hemen sonra, GPU'yu açmadan ÖNCE olmalı
+- [x] **Kullanıcı/plan bazlı VTON kota sayacı** — bu, auth'tan hemen sonra, GPU'yu açmadan ÖNCE olmalı
 - [ ] Maliyet izleme (RunPod dashboard + basit bir günlük harcama alarmı)
 
 **Çıkış kriteri:** Gerçek bir kullanıcı hesabıyla giriş yapıp, gerçek bulut GPU'da bir VTON isteği çalıştırabiliyorsunuz; kötü niyetli/sınırsız istek maliyeti şişiremiyor.
