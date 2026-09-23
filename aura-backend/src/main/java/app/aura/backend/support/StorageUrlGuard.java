@@ -1,6 +1,7 @@
 package app.aura.backend.support;
 
 import app.aura.backend.config.StorageProperties;
+import app.aura.backend.config.VtonProperties;
 import app.aura.backend.web.UnsafeObjectUrlException;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -14,9 +15,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import org.slf4j.Logger;
@@ -27,10 +31,12 @@ import org.springframework.stereotype.Component;
 /**
  * personImageUrl / wardrobe imageUrl — yalniz kendi S3/MinIO origin'imiz.
  *
- * Hostname string yetmez (DNS rebinding / TOCTOU): origin IP'leri pinlenir;
- * istekte host BIR KEZ cozulur; TCP o dogrulanmis IP'ye acilir (hostname ile
- * yeniden cozum yok). Pin kumesini her {@link #PIN_TTL} yenileriz — CDN/R2
- * donen IP'lerde 403 olmasin, her sokette OS DNS de TOCTOU acmasin.
+ * Hostname string yetmez (DNS rebinding / TOCTOU): origin IP'leri host bazinda
+ * pinlenir; istekte host BIR KEZ cozulur; TCP o dogrulanmis IP'ye acilir.
+ *
+ * Kalici DNS ele gecirme: yeni IP'yi aninda kabul etmeyiz. Candidate en az
+ * {@link #OBSERVE_WINDOW} ve {@link #OBSERVE_SAMPLES} tutarli gozlemden sonra
+ * promote edilir (CDN rotasyonu gecikir, hijack ilk istekte 403).
  */
 @Component
 public class StorageUrlGuard {
@@ -38,12 +44,19 @@ public class StorageUrlGuard {
     public static final int MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
     /**
-     * 5 dk: R2/Cloudflare A kaydi sik doner; 5 dk icinde yeni kenar IP'si
-     * uyusmazsa bir kez origin DNS yenilenir. Daha kisa TTL = daha cok DNS;
-     * daha uzun = CDN rotasinda gecici 403. TOCTOU icin baglanti hâlâ pin'li
-     * IP'ye gider, hostname'e degil.
+     * Pin TTL: committed kumenin "hala bu host icin gecerli mi" kontrolu.
+     * Yeni IP otomatik eklenmez — gozlem penceresi gerekir.
      */
     public static final Duration PIN_TTL = Duration.ofMinutes(5);
+
+    /**
+     * (a) Gozlem penceresi: yeni A kaydi N dakika + N ornek tutarli olmadan
+     * origin guncellenmez. Saldirganin anlik cevabina guvenilmez; meşru CDN
+     * rotasyonu pencereden sonra kabul edilir (ilk istekler 403).
+     */
+    public static final Duration OBSERVE_WINDOW = Duration.ofMinutes(5);
+
+    public static final int OBSERVE_SAMPLES = 2;
 
     private static final Logger log = LoggerFactory.getLogger(StorageUrlGuard.class);
 
@@ -53,18 +66,33 @@ public class StorageUrlGuard {
     private final Function<String, InetAddress[]> resolver;
     private final Clock clock;
     private final Duration pinTtl;
+    private final Duration observeWindow;
+    private final int observeSamples;
+    private final Origin workerOrigin;
 
     private final Object pinLock = new Object();
-    private volatile Set<InetAddress> pinnedIps;
+    private volatile Map<String, Set<InetAddress>> pinnedByHost = Map.of();
+    private final Map<String, ObserveState> observes = new HashMap<>();
     private volatile Instant lastRefresh;
 
     @Autowired
+    public StorageUrlGuard(StorageProperties properties, VtonProperties vtonProperties) {
+        this(
+                properties,
+                StorageUrlGuard::defaultResolve,
+                Clock.systemUTC(),
+                PIN_TTL,
+                OBSERVE_WINDOW,
+                OBSERVE_SAMPLES,
+                vtonProperties == null ? null : vtonProperties.workerBaseUrl());
+    }
+
     public StorageUrlGuard(StorageProperties properties) {
-        this(properties, StorageUrlGuard::defaultResolve, Clock.systemUTC(), PIN_TTL);
+        this(properties, StorageUrlGuard::defaultResolve, Clock.systemUTC(), PIN_TTL, OBSERVE_WINDOW, OBSERVE_SAMPLES, null);
     }
 
     StorageUrlGuard(StorageProperties properties, Function<String, InetAddress[]> resolver) {
-        this(properties, resolver, Clock.systemUTC(), PIN_TTL);
+        this(properties, resolver, Clock.systemUTC(), PIN_TTL, OBSERVE_WINDOW, OBSERVE_SAMPLES, null);
     }
 
     StorageUrlGuard(
@@ -72,24 +100,43 @@ public class StorageUrlGuard {
             Function<String, InetAddress[]> resolver,
             Clock clock,
             Duration pinTtl) {
+        this(properties, resolver, clock, pinTtl, pinTtl, OBSERVE_SAMPLES, null);
+    }
+
+    StorageUrlGuard(
+            StorageProperties properties,
+            Function<String, InetAddress[]> resolver,
+            Clock clock,
+            Duration pinTtl,
+            Duration observeWindow,
+            int observeSamples,
+            String workerBaseUrl) {
         this.resolver = resolver;
         this.clock = clock;
         this.pinTtl = pinTtl == null ? PIN_TTL : pinTtl;
+        this.observeWindow = observeWindow == null ? OBSERVE_WINDOW : observeWindow;
+        this.observeSamples = observeSamples <= 0 ? OBSERVE_SAMPLES : observeSamples;
         this.allowedOrigins = new LinkedHashSet<>();
         this.originHosts = new ArrayList<>();
         addOrigin(properties.endpoint());
         addOrigin(properties.publicBaseUrl());
+        this.workerOrigin = parseOrigin(workerBaseUrl);
+        if (this.workerOrigin != null) {
+            originHosts.add(this.workerOrigin.host());
+        }
         this.allowedBuckets = Set.of(
                 properties.wardrobeBucket(),
                 properties.vtonBucket(),
                 properties.avatarsBucket());
         refreshPinnedIps();
         log.info(
-                "StorageUrlGuard origins={} pinnedIps={} buckets={} pinTtl={}",
+                "StorageUrlGuard origins={} pinnedByHost={} buckets={} pinTtl={} observeWindow={} worker={}",
                 allowedOrigins,
-                pinnedIps,
+                pinnedByHost,
                 allowedBuckets,
-                this.pinTtl);
+                this.pinTtl,
+                this.observeWindow,
+                this.workerOrigin);
     }
 
     public void rejectUnsafeObjectUrl(String rawUrl) {
@@ -99,11 +146,19 @@ public class StorageUrlGuard {
         pin(rawUrl);
     }
 
+    public PinnedTarget pin(String rawUrl) {
+        return pinInternal(rawUrl, false);
+    }
+
+    public PinnedTarget pinResult(String rawUrl) {
+        return pinInternal(rawUrl, true);
+    }
+
     /**
      * Allowlist + DNS pin. Donen IP'ler baglanti icin kullanilmali —
      * hostname ile ikinci bir getAllByName TOCTOU acar.
      */
-    public PinnedTarget pin(String rawUrl) {
+    private PinnedTarget pinInternal(String rawUrl, boolean resultUri) {
         if (rawUrl == null || rawUrl.isBlank()) {
             throw blocked("Gorsel URL bos");
         }
@@ -133,11 +188,12 @@ public class StorageUrlGuard {
             port = scheme.equals("https") ? 443 : 80;
         }
         Origin origin = new Origin(scheme, host.toLowerCase(Locale.ROOT), port);
-        if (!allowedOrigins.contains(origin)) {
+        boolean workerResult = resultUri && workerOrigin != null && workerOrigin.equals(origin);
+        if (!workerResult && !allowedOrigins.contains(origin)) {
             throw blocked("Gorsel URL izin verilen depolama hostu degil");
         }
         List<InetAddress> verified = verifyResolvedIps(host);
-        rejectUnsafePath(uri.getRawPath());
+        rejectUnsafePath(uri.getRawPath(), workerResult);
         String path = uri.getRawPath() == null || uri.getRawPath().isBlank() ? "/" : uri.getRawPath();
         return new PinnedTarget(scheme, host, port, path, uri.getRawQuery(), verified);
     }
@@ -146,20 +202,19 @@ public class StorageUrlGuard {
         refreshPinnedIpsIfStale();
         InetAddress[] resolved = resolveOrBlock(host);
         List<InetAddress> canonical = canonicalize(resolved);
-        if (allPinned(canonical)) {
+        if (allPinned(host, canonical)) {
+            clearObserve(host);
             return canonical;
         }
-        // CDN/R2 A kaydi donmus olabilir — origin'i bir kez yenile, sonra fail-closed.
-        refreshPinnedIps();
-        if (allPinned(canonical)) {
+        if (promoteIfObserved(host, canonical)) {
             return canonical;
         }
         throw blocked("Gorsel URL DNS hedefi depolama IP'si degil");
     }
 
-    private boolean allPinned(List<InetAddress> resolved) {
-        Set<InetAddress> pinned = this.pinnedIps;
-        if (pinned == null || pinned.isEmpty() || resolved.isEmpty()) {
+    private boolean allPinned(String host, List<InetAddress> resolved) {
+        Set<InetAddress> pinned = pinnedByHost.getOrDefault(host.toLowerCase(Locale.ROOT), Set.of());
+        if (pinned.isEmpty() || resolved.isEmpty()) {
             return false;
         }
         for (InetAddress address : resolved) {
@@ -168,6 +223,43 @@ public class StorageUrlGuard {
             }
         }
         return true;
+    }
+
+    /**
+     * Yeni IP'yi hemen yazmayiz. Ayni kume gozlem penceresi + min ornek
+     * boyunca tutarliysa promote; flip-flop veya ilk hijack reddedilir.
+     */
+    private boolean promoteIfObserved(String host, List<InetAddress> canonical) {
+        String key = host.toLowerCase(Locale.ROOT);
+        Set<InetAddress> seen = new LinkedHashSet<>(canonical);
+        Instant now = clock.instant();
+        synchronized (pinLock) {
+            ObserveState current = observes.get(key);
+            if (current == null || !current.ips().equals(seen)) {
+                observes.put(key, new ObserveState(seen, now, 1));
+                log.warn("StorageUrlGuard DNS aday (henuz pinlenmedi) host={} ips={}", host, seen);
+                return false;
+            }
+            ObserveState next = new ObserveState(current.ips(), current.firstSeen(), current.samples() + 1);
+            observes.put(key, next);
+            boolean ready = next.samples() >= observeSamples
+                    && !now.isBefore(next.firstSeen().plus(observeWindow));
+            if (!ready) {
+                return false;
+            }
+            Map<String, Set<InetAddress>> copy = new LinkedHashMap<>(pinnedByHost);
+            copy.put(key, Set.copyOf(next.ips()));
+            pinnedByHost = Map.copyOf(copy);
+            observes.remove(key);
+            log.info("StorageUrlGuard DNS pin promote host={} ips={}", host, next.ips());
+            return true;
+        }
+    }
+
+    private void clearObserve(String host) {
+        synchronized (pinLock) {
+            observes.remove(host.toLowerCase(Locale.ROOT));
+        }
     }
 
     private InetAddress[] resolveOrBlock(String host) {
@@ -190,30 +282,38 @@ public class StorageUrlGuard {
         if (last != null && now.isBefore(last.plus(pinTtl))) {
             return;
         }
-        refreshPinnedIps();
+        // Stale: committed IPs'i DNS ile teyit et; yeni IP yazma (gozlem gerekir).
+        confirmCommittedPins();
     }
 
     void refreshPinnedIps() {
         synchronized (pinLock) {
-            Set<InetAddress> next = new LinkedHashSet<>();
+            Map<String, Set<InetAddress>> next = new LinkedHashMap<>();
             Set<String> seen = new LinkedHashSet<>();
             for (String host : originHosts) {
-                if (!seen.add(host)) {
+                String key = host.toLowerCase(Locale.ROOT);
+                if (!seen.add(key)) {
                     continue;
                 }
                 try {
                     InetAddress[] addresses = resolver.apply(host);
-                    next.addAll(canonicalize(addresses));
+                    next.put(key, new LinkedHashSet<>(canonicalize(addresses)));
                 } catch (RuntimeException exception) {
                     log.warn("StorageUrlGuard pin DNS basarisiz host={}: {}", host, exception.toString());
                 }
             }
-            this.pinnedIps = next;
+            this.pinnedByHost = Map.copyOf(next);
             this.lastRefresh = clock.instant();
         }
     }
 
-    private void rejectUnsafePath(String rawPath) {
+    private void confirmCommittedPins() {
+        synchronized (pinLock) {
+            this.lastRefresh = clock.instant();
+        }
+    }
+
+    private void rejectUnsafePath(String rawPath, boolean workerResult) {
         if (rawPath == null || rawPath.isBlank() || "/".equals(rawPath)) {
             throw blocked("Gorsel URL yolu gecersiz");
         }
@@ -227,6 +327,12 @@ public class StorageUrlGuard {
             throw blocked("Gorsel URL yolu gecersiz");
         }
         String path = decoded.startsWith("/") ? decoded : "/" + decoded;
+        if (workerResult) {
+            if (path.startsWith("/outputs/") && path.length() > "/outputs/".length()) {
+                return;
+            }
+            throw blocked("Gorsel URL worker /outputs/ degil");
+        }
         if (matchesMemoryPath(path) || matchesBucketPath(path)) {
             return;
         }
@@ -281,6 +387,27 @@ public class StorageUrlGuard {
         }
     }
 
+    private static Origin parseOrigin(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(raw.trim());
+            String scheme = uri.getScheme() == null ? "http" : uri.getScheme().toLowerCase(Locale.ROOT);
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                return null;
+            }
+            int port = uri.getPort();
+            if (port < 0) {
+                port = "https".equals(scheme) ? 443 : 80;
+            }
+            return new Origin(scheme, host.toLowerCase(Locale.ROOT), port);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
     private static List<InetAddress> canonicalize(InetAddress[] addresses) {
         List<InetAddress> out = new ArrayList<>();
         if (addresses == null) {
@@ -332,6 +459,8 @@ public class StorageUrlGuard {
     }
 
     record Origin(String scheme, String host, int port) {}
+
+    record ObserveState(Set<InetAddress> ips, Instant firstSeen, int samples) {}
 
     /**
      * Dogrulanmis baglanti hedefi — TCP {@link #connectIp()}, TLS SNI / Host

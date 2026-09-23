@@ -80,15 +80,24 @@ Header parse edilemeyen format (≥24 bayt, ImageIO + WebP/BMP magic yok) fail-c
 
 ## VTON / Wardrobe object URL SSRF
 
-`personImageUrl` ve wardrobe `imageUrl` yalnızca `aura.storage.endpoint` / `public-base-url` origin’ine ve `wardrobe|vton|avatars` bucket yol şablonuna izin verir. DNS: origin IP’leri `PIN_TTL=5dk` ile yenilenir; istekte host bir kez çözülür ve **TCP o IP’ye** açılır (hostname ile ikinci çözüm TOCTOU / rebinding). Host header ve TLS SNI orijinal hostname kalır. `127.0.0.1:8001` ve `169.254.169.254` allowlist dışı. Wardrobe indirme `PinnedHttpDownloader` (stream tavanı `maxImageBytes`, Content-Length önce). Worker `image_fetch` aynı pin + httplib SNI.
+`personImageUrl` ve wardrobe `imageUrl` yalnızca `aura.storage.endpoint` / `public-base-url` origin’ine ve `wardrobe|vton|avatars` bucket yol şablonuna izin verir. DNS pin **host bazlıdır** (worker loopback, storage CDN ile birleşmez).
+
+TCP doğrulanmış IP’ye açılır; Host header ve TLS SNI orijinal hostname kalır. Java TLS: `SSLParameters.setEndpointIdentificationAlgorithm("HTTPS")` (RFC 2818) — `evil.example.com` sertifikası `files.aura.test` için sessiz kabul edilmez (`PinnedHttpDownloaderTlsTest`, gerçek keytool PKCS12 + trust store). Python `ssl.create_default_context()` + `check_hostname`.
+
+Kalıcı DNS ele geçirme: mismatch’te pin **anında yenilenmez**. Aday IP `OBSERVE_WINDOW=5dk` + `OBSERVE_SAMPLES=2` tutarlı gözlemden sonra promote edilir (seçenek a). Sürdürülebilir kötü A kaydı ilk istekte 403. Meşru CDN rotasyonu pencereden sonra kabul; o süre içindeki istekler 403. Bootstrap (süreç açılışı) hâlâ ilk DNS’e güvenir — boot anında zehirli resolver bu turda kapsam dışı.
+
+Java ve Python DNS pinning mantığı ayrı implementasyonlar, senkron tutulmalı. Meşru (pin ile eşleşen) çözümleme her iki tarafta da o hostun gözlem adayını sıfırlar (`StorageUrlGuard.clearObserve` / `url_allowlist._clear_observe`). İyi↔kötü salınımı sayacı taşıyamaz. `OBSERVE_SAMPLES` her iki dilde 2; 1’e düşerse kilit testi kırılır.
+
+`resolveResultBytes`: `resultImageUri` `PinnedHttpDownloader.downloadResult` + aynı 20MB tavan. Origin: storage allowlist **veya** yapılandırılmış `workerBaseUrl` + yol `/outputs/{dosya}`. Worker `/internal` ve metadata 403. Magic: PNG/JPEG/WebP imzası; eşleşme yoksa red (varsayılan PNG yok).
+
+`127.0.0.1:8001` (person/wardrobe URL) ve `169.254.169.254` allowlist dışı.
 
 ## Test edilmemiş mutasyon yüzeyi
 
-Bu turda kapatılan: S2 (`item.getImageUrl()` kapısı — metadata giysi URL 403 + spy), S6 (stream tavanı gövdeyi belleğe almadan), S7 (imageUrl indirilemezse 201 ile URL kaydetme kaldırıldı), P3 (bağlantı pin’li IP), P4 (5dk pin yenileme), P6 (Host header hostname), P7 (Python IP rewrite + TOCTOU test), K8 (önceki tur, ≥24 garbage 422).
+Bu turda kapatılan: S2, S6, S7, P3, P4 (gözlem penceresi; anlık mismatch refresh kaldırıldı), P6, P7, P8 (canlı self-signed HTTPS hostname mismatch), K8, worker `resultImageUri` (StorageUrlGuard + pin + magic).
 
 Açık bırakılan:
 
-- **P8:** TLS SNI uygulandı (`SSLSocket` / `wrap_socket(server_hostname=…)`); canlı HTTPS sertifika ile rebinding kanıtı yok (testler HTTP).
-- **VtonService.resolveResultBytes:** worker `resultImageUri` (`http://127.0.0.1:8001/outputs/…`) StorageUrlGuard dışı, `RestClient` gövdeyi sınırsız okur. Kullanıcı URL’si değil; worker origin ayrı allowlist değil.
-- Origin hostname DNS’inin tamamen zehirlenmesi (pin refresh + istek çözümü aynı anda 169.254) — operasyonel CDN zehri, klasik rebinding değil.
+- Origin hostname DNS’inin **süreç açılışında** tamamen zehirlenmesi (bootstrap pin) — gözlem penceresi sonraki değişimleri keser, boot zehri ayrı operasyonel konu.
+- Gözlem penceresi bitince tutarlı yeni IP promote edilir; uzun süreli BGP/hijack 5dk+2 örnek sonra pin’e yazılır (bilinçli CDN takası). Daha sıkı seçenek: (b) manuel onay veya (c) sabit origin IP.
 

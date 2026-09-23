@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     max_download_bytes: int = 20 * 1024 * 1024
     # Java StorageUrlGuard.PIN_TTL ile senkron (CDN A kaydi / TOCTOU dengesi).
     pin_ttl_seconds: float = 300.0
+    pin_observe_seconds: float = 300.0
+    pin_observe_samples: int = 2
 
 
 settings = Settings()

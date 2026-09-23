@@ -170,3 +170,122 @@ def test_connect_uses_pinned_ip_not_later_dns(monkeypatch):
     assert seen == ["198.51.100.10"]
     assert calls["n"] == 2
 
+
+def test_persistent_dns_hijack_rejected_on_first_pin(monkeypatch):
+    """Tek tutarli kotu A kaydi (flip-flop degil) ilk istekte reddedilir."""
+    import ipaddress
+
+    from app.services import url_allowlist
+
+    cdn = ipaddress.ip_address("198.51.100.10")
+    hijack = ipaddress.ip_address("169.254.169.254")
+    state = {"poison": False}
+
+    def fake_resolve(host: str):
+        if host != "files.aura.test":
+            raise OSError(host)
+        if state["poison"]:
+            return [hijack]
+        return [cdn]
+
+    monkeypatch.setattr(url_allowlist, "_resolve", fake_resolve)
+    monkeypatch.setattr(settings, "s3_endpoint", "http://files.aura.test:9000")
+    monkeypatch.setattr(settings, "s3_public_base_url", "http://files.aura.test:9000")
+    reset_allowlist_cache()
+    url_allowlist.pinned_by_host()
+    state["poison"] = True
+
+    url = "http://files.aura.test:9000/aura-vton/person/x.jpg"
+    with pytest.raises(VtonInferenceError) as ei:
+        assert_object_url_allowed(url)
+    assert ei.value.code == "SSRF"
+    with pytest.raises(VtonInferenceError) as ei2:
+        assert_object_url_allowed(url)
+    assert ei2.value.code == "SSRF"
+
+
+def test_observe_window_promotes_consistent_ip_after_delay(monkeypatch):
+    import ipaddress
+
+    from app.services import url_allowlist
+
+    first = ipaddress.ip_address("198.51.100.10")
+    rotated = ipaddress.ip_address("198.51.100.20")
+    state = {"rotated": False}
+    clock = {"t": 0.0}
+
+    def fake_resolve(host: str):
+        if host != "files.aura.test":
+            raise OSError(host)
+        return [rotated] if state["rotated"] else [first]
+
+    monkeypatch.setattr(url_allowlist, "_resolve", fake_resolve)
+    monkeypatch.setattr(url_allowlist, "_now", lambda: clock["t"])
+    monkeypatch.setattr(settings, "s3_endpoint", "http://files.aura.test:9000")
+    monkeypatch.setattr(settings, "s3_public_base_url", "http://files.aura.test:9000")
+    reset_allowlist_cache()
+    url_allowlist.pinned_by_host()
+    state["rotated"] = True
+    url = "http://files.aura.test:9000/aura-vton/person/x.jpg"
+    with pytest.raises(VtonInferenceError):
+        assert_object_url_allowed(url)
+    clock["t"] = 10.0
+    with pytest.raises(VtonInferenceError):
+        assert_object_url_allowed(url)
+    clock["t"] = 301.0
+    assert_object_url_allowed(url)
+
+
+def test_observe_samples_constant_is_two():
+    """OBSERVE_SAMPLES 1'e duserse kirilir (Java StorageUrlGuard.OBSERVE_SAMPLES ile ayni kilit)."""
+    from app.services import url_allowlist
+
+    assert url_allowlist.OBSERVE_SAMPLES == 2
+    assert settings.pin_observe_samples == 2
+    assert url_allowlist._observe_samples() == 2
+
+
+def test_oscillation_does_not_promote_on_wall_clock(monkeypatch):
+    """Test C: kotu→iyi→kotu→iyi, gercek monotonic saat. Pencere asilsa da promote yok."""
+    import ipaddress
+    import time
+
+    from app.services import url_allowlist
+
+    good = ipaddress.ip_address("198.51.100.10")
+    bad = ipaddress.ip_address("169.254.169.254")
+    which = {"ip": good}
+
+    def fake_resolve(host: str):
+        if host != "files.aura.test":
+            raise OSError(host)
+        return [which["ip"]]
+
+    monkeypatch.setattr(url_allowlist, "_resolve", fake_resolve)
+    monkeypatch.setattr(settings, "s3_endpoint", "http://files.aura.test:9000")
+    monkeypatch.setattr(settings, "s3_public_base_url", "http://files.aura.test:9000")
+    monkeypatch.setattr(settings, "pin_observe_seconds", 2.0)
+    monkeypatch.setattr(settings, "pin_observe_samples", 2)
+    reset_allowlist_cache()
+    url_allowlist.pinned_by_host()
+
+    url = "http://files.aura.test:9000/aura-vton/person/x.jpg"
+    pattern = ["bad", "good", "bad", "good", "bad", "good", "bad", "good"]
+    started = time.monotonic()
+    for step in pattern:
+        which["ip"] = bad if step == "bad" else good
+        if step == "bad":
+            with pytest.raises(VtonInferenceError) as ei:
+                assert_object_url_allowed(url)
+            assert ei.value.code == "SSRF"
+        else:
+            target = url_allowlist.pin_object_url(url)
+            assert target.ip == good
+        time.sleep(0.36)
+    elapsed = time.monotonic() - started
+    assert elapsed >= 2.0
+    assert len(pattern) == 8
+    assert url_allowlist.pinned_ips_for("files.aura.test") == {good}
+    assert "files.aura.test" not in url_allowlist._CANDIDATES
+
+

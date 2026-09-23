@@ -113,9 +113,44 @@ class PinnedHttpDownloaderTest {
                 clock,
                 Duration.ofMinutes(5));
         clock.plus(Duration.ofMinutes(6));
+        assertThatThrownBy(
+                        () -> guard.pin("http://files.aura.test:9000/aura-vton/person/x.jpg"))
+                .isInstanceOf(UnsafeObjectUrlException.class);
+        assertThatThrownBy(
+                        () -> guard.pin("http://files.aura.test:9000/aura-vton/person/x.jpg"))
+                .isInstanceOf(UnsafeObjectUrlException.class);
+        clock.plus(Duration.ofMinutes(6));
         StorageUrlGuard.PinnedTarget target = guard.pin(
                 "http://files.aura.test:9000/aura-vton/person/x.jpg");
         assertThat(target.connectIp().getHostAddress()).isEqualTo("198.51.100.20");
+    }
+
+    @Test
+    void downloadResultAllowsWorkerOutputsNotInternal() throws Exception {
+        try (TinyHttpServer server = new TinyHttpServer(PNG)) {
+            String worker = "http://127.0.0.1:" + server.port();
+            StorageUrlGuard guard = new StorageUrlGuard(
+                    localMinio(9000),
+                    host -> {
+                        try {
+                            return new InetAddress[] {InetAddress.getByName("127.0.0.1")};
+                        } catch (java.net.UnknownHostException exception) {
+                            throw new IllegalStateException(exception);
+                        }
+                    },
+                    Clock.systemUTC(),
+                    Duration.ofMinutes(5),
+                    Duration.ofMinutes(5),
+                    2,
+                    worker);
+            PinnedHttpDownloader downloader = new PinnedHttpDownloader(guard);
+            assertThatThrownBy(() -> downloader.download(worker + "/outputs/1.png", 1_000_000))
+                    .isInstanceOf(UnsafeObjectUrlException.class);
+            byte[] body = downloader.downloadResult(worker + "/outputs/1.png", 1_000_000);
+            assertThat(body).isEqualTo(PNG);
+            assertThatThrownBy(() -> downloader.downloadResult(worker + "/internal", 1_000_000))
+                    .isInstanceOf(UnsafeObjectUrlException.class);
+        }
     }
 
     private static StorageProperties originAt(String host, int port) {

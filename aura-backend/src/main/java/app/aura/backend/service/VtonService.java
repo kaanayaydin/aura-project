@@ -14,6 +14,8 @@ import app.aura.backend.repository.VtonJobRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.service.VtonWorkerClient.WorkerStatusSnapshot;
 import app.aura.backend.support.Base64Images;
+import app.aura.backend.support.ImageMagic;
+import app.aura.backend.support.PinnedHttpDownloader;
 import app.aura.backend.support.StorageUrlGuard;
 import app.aura.backend.web.ImageSafetyGate;
 import app.aura.backend.web.InvalidImagePayloadException;
@@ -21,7 +23,6 @@ import app.aura.backend.web.UserNotFoundException;
 import app.aura.backend.web.VtonJobNotFoundException;
 import app.aura.backend.web.VtonOwnershipException;
 import app.aura.backend.web.VtonWorkerUnavailableException;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +33,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 /**
  * Virtual Try-On orkestrasyonu.
@@ -57,7 +56,7 @@ public class VtonService {
     private final VtonWorkerClient vtonWorkerClient;
     private final VtonQuotaService vtonQuotaService;
     private final StorageUrlGuard storageUrlGuard;
-    private final RestClient workerRestClient;
+    private final PinnedHttpDownloader pinnedHttpDownloader;
 
     public VtonService(
             VtonJobRepository vtonJobRepository,
@@ -67,7 +66,8 @@ public class VtonService {
             WardrobeGuardrailService wardrobeGuardrailService,
             VtonWorkerClient vtonWorkerClient,
             VtonQuotaService vtonQuotaService,
-            StorageUrlGuard storageUrlGuard) {
+            StorageUrlGuard storageUrlGuard,
+            PinnedHttpDownloader pinnedHttpDownloader) {
         this.vtonJobRepository = vtonJobRepository;
         this.wardrobeItemRepository = wardrobeItemRepository;
         this.userRepository = userRepository;
@@ -76,13 +76,7 @@ public class VtonService {
         this.vtonWorkerClient = vtonWorkerClient;
         this.vtonQuotaService = vtonQuotaService;
         this.storageUrlGuard = storageUrlGuard;
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(vtonProperties.connectTimeoutSeconds()));
-        factory.setReadTimeout(Duration.ofSeconds(vtonProperties.readTimeoutSeconds()));
-        this.workerRestClient = RestClient.builder()
-                .baseUrl(vtonProperties.workerBaseUrl())
-                .requestFactory(factory)
-                .build();
+        this.pinnedHttpDownloader = pinnedHttpDownloader;
     }
 
     @Transactional(noRollbackFor = VtonWorkerUnavailableException.class)
@@ -210,7 +204,7 @@ public class VtonService {
         }
 
         byte[] bytes = resolveResultBytes(job);
-        MediaType mediaType = detectImageMediaType(bytes);
+        MediaType mediaType = ImageMagic.requireImageMediaType(bytes);
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .header("Cache-Control", "private, max-age=3600")
@@ -256,31 +250,17 @@ public class VtonService {
             throw new VtonJobNotFoundException("VTON sonuc gorseli yok: " + job.getId());
         }
 
-        // 2) Worker HTTP URI (ornek: http://127.0.0.1:8001/outputs/42.png)
         if (uri.startsWith("http://") || uri.startsWith("https://")) {
-            try {
-                byte[] remote = RestClient.create()
-                        .get()
-                        .uri(uri)
-                        .retrieve()
-                        .body(byte[].class);
-                if (remote != null && remote.length > 0) {
-                    return remote;
-                }
-            } catch (Exception exception) {
-                log.warn("VTON worker gorseli alinamadi uri={}: {}", uri, exception.getMessage());
-            }
+            byte[] remote = pinnedHttpDownloader.downloadResult(
+                    uri, StorageUrlGuard.MAX_DOWNLOAD_BYTES);
+            return remote;
         }
 
-        // 3) Yerel worker outputs yolu (jobId.png)
+        String base = vtonProperties.workerBaseUrl().replaceAll("/$", "");
+        String constructed = base + "/outputs/" + job.getId() + ".png";
         try {
-            byte[] fromWorker = workerRestClient.get()
-                    .uri("/outputs/{file}", job.getId() + ".png")
-                    .retrieve()
-                    .body(byte[].class);
-            if (fromWorker != null && fromWorker.length > 0) {
-                return fromWorker;
-            }
+            return pinnedHttpDownloader.downloadResult(
+                    constructed, StorageUrlGuard.MAX_DOWNLOAD_BYTES);
         } catch (Exception exception) {
             log.warn(
                     "VTON /outputs proxy basarisiz jobId={}: {}",
@@ -302,16 +282,6 @@ public class VtonService {
                         job, itemsById.get(job.getWardrobeItemId())))
                 .filter(Objects::nonNull)
                 .toList();
-    }
-
-    private static MediaType detectImageMediaType(byte[] bytes) {
-        if (bytes != null && bytes.length >= 3
-                && (bytes[0] & 0xFF) == 0xFF
-                && (bytes[1] & 0xFF) == 0xD8
-                && (bytes[2] & 0xFF) == 0xFF) {
-            return MediaType.IMAGE_JPEG;
-        }
-        return MediaType.IMAGE_PNG;
     }
 
     private void syncFromWorker(VtonJob job) {

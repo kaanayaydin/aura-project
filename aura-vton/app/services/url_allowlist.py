@@ -1,8 +1,7 @@
 """Object URL allowlist — Java StorageUrlGuard ile senkron (SSRF).
 
-Pin TTL 300s: CDN/R2 A kaydi doner; her sokette hostname DNS TOCTOU acar.
-Istek: host bir kez cozulur, TCP dogrulanmis IP'ye gider. Pin disi IP'de
-origin bir kez yenilenir (meşru rota), hâlâ uymazsa reddedilir.
+Pin host-bazli. Yeni DNS IP aninda kabul edilmez: gozlem penceresi
+(pin_observe_seconds + samples) tutarli olmadan promote yok. TCP pin'li IP.
 """
 
 from __future__ import annotations
@@ -17,10 +16,13 @@ from app.config import settings
 from app.services.errors import VtonInferenceError
 
 PIN_TTL_SEC = 300.0
+OBSERVE_WINDOW_SEC = 300.0
+OBSERVE_SAMPLES = 2
 
-_PINNED_IPS: set[ipaddress.IPv4Address | ipaddress.IPv6Address] | None = None
+_PINNED_BY_HOST: dict[str, set[ipaddress.IPv4Address | ipaddress.IPv6Address]] | None = None
 _ALLOWED_ORIGINS: set[tuple[str, str, int]] | None = None
 _PINNED_AT: float | None = None
+_CANDIDATES: dict[str, tuple[frozenset, float, int]] = {}
 
 
 def _origin(scheme: str, host: str, port: int) -> tuple[str, str, int]:
@@ -76,42 +78,75 @@ def allowed_origins() -> set[tuple[str, str, int]]:
     return _ALLOWED_ORIGINS
 
 
+def _now() -> float:
+    return time.monotonic()
+
+
+def _observe_window() -> float:
+    return float(getattr(settings, "pin_observe_seconds", OBSERVE_WINDOW_SEC))
+
+
+def _observe_samples() -> int:
+    return int(getattr(settings, "pin_observe_samples", OBSERVE_SAMPLES))
+
+
 def _pin_ttl() -> float:
     return float(getattr(settings, "pin_ttl_seconds", PIN_TTL_SEC))
 
 
+def pinned_ips_for(host: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    pinned_by_host()
+    return _PINNED_BY_HOST.get(host.lower().rstrip("."), set()) if _PINNED_BY_HOST else set()
+
+
 def pinned_ips(*, force: bool = False) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    global _PINNED_IPS, _PINNED_AT
-    now = time.monotonic()
+    """Geriye donuk: tum host pinlerinin birlesimi (test)."""
+    by_host = pinned_by_host(force=force)
+    out: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+    for ips in by_host.values():
+        out.update(ips)
+    return out
+
+
+def pinned_by_host(*, force: bool = False) -> dict[str, set[ipaddress.IPv4Address | ipaddress.IPv6Address]]:
+    """force=True committed kümeyi saldirgan cevabiyla DEĞİŞTİRMEZ.
+
+    Sadece bootstrap (None) veya TTL sonrasi teyit damgasi. Yeni IP yalniz
+    gozlem penceresi ile promote edilir.
+    """
+    global _PINNED_BY_HOST, _PINNED_AT
+    now = _now()
     ttl = _pin_ttl()
     if (
         not force
-        and _PINNED_IPS is not None
+        and _PINNED_BY_HOST is not None
         and _PINNED_AT is not None
         and (now - _PINNED_AT) < ttl
     ):
-        return _PINNED_IPS
-    pinned: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
-    seen_hosts: set[str] = set()
-    for _scheme, host, _port in allowed_origins():
-        if host in seen_hosts:
-            continue
-        seen_hosts.add(host)
-        try:
-            pinned.update(_resolve(host))
-        except OSError:
-            continue
-    _PINNED_IPS = pinned
+        return _PINNED_BY_HOST
+    if _PINNED_BY_HOST is None:
+        next_map: dict[str, set[ipaddress.IPv4Address | ipaddress.IPv6Address]] = {}
+        seen_hosts: set[str] = set()
+        for _scheme, host, _port in allowed_origins():
+            if host in seen_hosts:
+                continue
+            seen_hosts.add(host)
+            try:
+                next_map[host.lower()] = set(_resolve(host))
+            except OSError:
+                continue
+        _PINNED_BY_HOST = next_map
     _PINNED_AT = now
-    return _PINNED_IPS
+    return _PINNED_BY_HOST
 
 
 def reset_allowlist_cache() -> None:
     """Test: settings monkeypatch sonrasi pin yenile."""
-    global _PINNED_IPS, _ALLOWED_ORIGINS, _PINNED_AT
-    _PINNED_IPS = None
+    global _PINNED_BY_HOST, _ALLOWED_ORIGINS, _PINNED_AT, _CANDIDATES
+    _PINNED_BY_HOST = None
     _ALLOWED_ORIGINS = None
     _PINNED_AT = None
+    _CANDIDATES = {}
 
 
 @dataclass(frozen=True)
@@ -169,11 +204,12 @@ def pin_object_url(url: str) -> PinnedTarget:
         resolved = [_canon(a) for a in _resolve(host)]
     except OSError as exc:
         raise VtonInferenceError("Gorsel URL host cozulemedi", code="SSRF") from exc
-    pinned = pinned_ips()
-    if not resolved or any(addr not in pinned for addr in resolved):
-        pinned = pinned_ips(force=True)
-        if not resolved or any(addr not in pinned for addr in resolved):
-            raise VtonInferenceError("Gorsel URL DNS hedefi depolama IP'si degil", code="SSRF")
+    pinned = pinned_ips_for(host)
+    # Java verifyResolvedIps: allPinned → clearObserve; aksi halde gozlem.
+    if resolved and all(addr in pinned for addr in resolved):
+        _clear_observe(host)
+    elif not _observe_and_maybe_promote(host, resolved):
+        raise VtonInferenceError("Gorsel URL DNS hedefi depolama IP'si degil", code="SSRF")
     path = unquote(parsed.path or "")
     if ".." in path or ".." in (parsed.path or ""):
         raise VtonInferenceError("Gorsel URL yolu gecersiz", code="SSRF")
@@ -191,6 +227,36 @@ def pin_object_url(url: str) -> PinnedTarget:
 
 def assert_object_url_allowed(url: str) -> None:
     pin_object_url(url)
+
+
+def _clear_observe(host: str) -> None:
+    """Pin ile eslesen cozumleme bu hostun aday sayacini siler (Java clearObserve)."""
+    _CANDIDATES.pop(host.lower().rstrip("."), None)
+
+
+def _observe_and_maybe_promote(
+    host: str,
+    resolved: list[ipaddress.IPv4Address | ipaddress.IPv6Address],
+) -> bool:
+    """Kalici hijack ilk istekte False. Tutarli aday pencere+ornek sonra True."""
+    global _PINNED_BY_HOST, _CANDIDATES
+    key = host.lower().rstrip(".")
+    seen = frozenset(resolved)
+    now = _now()
+    current = _CANDIDATES.get(key)
+    if current is None or current[0] != seen:
+        _CANDIDATES[key] = (seen, now, 1)
+        return False
+    ips, first, samples = current
+    samples += 1
+    _CANDIDATES[key] = (ips, first, samples)
+    if samples < _observe_samples() or (now - first) < _observe_window():
+        return False
+    if _PINNED_BY_HOST is None:
+        _PINNED_BY_HOST = {}
+    _PINNED_BY_HOST[key] = set(ips)
+    _CANDIDATES.pop(key, None)
+    return True
 
 
 def _path_matches_bucket(path: str) -> bool:

@@ -21,6 +21,7 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,23 +42,45 @@ public class PinnedHttpDownloader {
     private static final Logger log = LoggerFactory.getLogger(PinnedHttpDownloader.class);
 
     private final StorageUrlGuard storageUrlGuard;
+    private final SSLSocketFactory sslSocketFactory;
 
+    @Autowired
     public PinnedHttpDownloader(StorageUrlGuard storageUrlGuard) {
+        this(storageUrlGuard, (SSLSocketFactory) SSLSocketFactory.getDefault());
+    }
+
+    PinnedHttpDownloader(StorageUrlGuard storageUrlGuard, SSLSocketFactory sslSocketFactory) {
         this.storageUrlGuard = storageUrlGuard;
+        this.sslSocketFactory = sslSocketFactory;
     }
 
     public byte[] download(String rawUrl, int maxBytes) {
+        return fetch(rawUrl, maxBytes, false);
+    }
+
+    /** Worker resultImageUri — storage veya yapilandirilmis worker /outputs/. */
+    public byte[] downloadResult(String rawUrl, int maxBytes) {
+        return fetch(rawUrl, maxBytes, true);
+    }
+
+    private byte[] fetch(String rawUrl, int maxBytes, boolean resultUri) {
         if (maxBytes <= 0) {
             maxBytes = StorageUrlGuard.MAX_DOWNLOAD_BYTES;
         }
         String current = rawUrl;
         for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
-            PinnedTarget target = storageUrlGuard.pin(current);
+            PinnedTarget target = resultUri
+                    ? storageUrlGuard.pinResult(current)
+                    : storageUrlGuard.pin(current);
             HopResponse hopResponse;
             try {
                 hopResponse = exchange(target, maxBytes);
             } catch (UnsafeObjectUrlException | InvalidImagePayloadException exception) {
                 throw exception;
+            } catch (javax.net.ssl.SSLHandshakeException exception) {
+                log.warn("Pinned HTTP TLS reddedildi url={}: {}", current, exception.toString());
+                throw new InvalidImagePayloadException(
+                        "Gorsel URL TLS hostname uyusmuyor: " + exception.getMessage());
             } catch (IOException exception) {
                 log.warn("Pinned HTTP indirme basarisiz url={}: {}", current, exception.toString());
                 throw new InvalidImagePayloadException("Gorsel URL indirilemedi.");
@@ -101,17 +124,18 @@ public class PinnedHttpDownloader {
         }
     }
 
-    private static Socket openSocket(PinnedTarget target) throws IOException {
+    private Socket openSocket(PinnedTarget target) throws IOException {
         Socket tcp = new Socket();
         tcp.connect(new InetSocketAddress(target.connectIp(), target.port()), CONNECT_TIMEOUT_MS);
         tcp.setSoTimeout(READ_TIMEOUT_MS);
         if (!"https".equals(target.scheme())) {
             return tcp;
         }
-        SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-        SSLSocket ssl = (SSLSocket) factory.createSocket(tcp, target.hostname(), target.port(), true);
+        SSLSocket ssl = (SSLSocket) sslSocketFactory.createSocket(
+                tcp, target.hostname(), target.port(), true);
         SSLParameters params = ssl.getSSLParameters();
         params.setServerNames(List.of(new SNIHostName(target.hostname())));
+        params.setEndpointIdentificationAlgorithm("HTTPS");
         ssl.setSSLParameters(params);
         ssl.startHandshake();
         return ssl;
