@@ -80,6 +80,12 @@ class Settings(BaseSettings):
     s3_secret_key: str = "aura_minio_secret"
     s3_path_style: bool = True
     s3_vton_bucket: str = "aura-vton"
+    s3_wardrobe_bucket: str = "aura-wardrobe"
+    s3_avatars_bucket: str = "aura-avatars"
+    # Java StorageUrlGuard.MAX_DOWNLOAD_BYTES ile senkron.
+    max_download_bytes: int = 20 * 1024 * 1024
+    # Java StorageUrlGuard.PIN_TTL ile senkron (CDN A kaydi / TOCTOU dengesi).
+    pin_ttl_seconds: float = 300.0
 
 
 settings = Settings()

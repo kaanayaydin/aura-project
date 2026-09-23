@@ -1,0 +1,378 @@
+package app.aura.backend.support;
+
+import app.aura.backend.config.StorageProperties;
+import app.aura.backend.web.UnsafeObjectUrlException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+/**
+ * personImageUrl / wardrobe imageUrl — yalniz kendi S3/MinIO origin'imiz.
+ *
+ * Hostname string yetmez (DNS rebinding / TOCTOU): origin IP'leri pinlenir;
+ * istekte host BIR KEZ cozulur; TCP o dogrulanmis IP'ye acilir (hostname ile
+ * yeniden cozum yok). Pin kumesini her {@link #PIN_TTL} yenileriz — CDN/R2
+ * donen IP'lerde 403 olmasin, her sokette OS DNS de TOCTOU acmasin.
+ */
+@Component
+public class StorageUrlGuard {
+
+    public static final int MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+    /**
+     * 5 dk: R2/Cloudflare A kaydi sik doner; 5 dk icinde yeni kenar IP'si
+     * uyusmazsa bir kez origin DNS yenilenir. Daha kisa TTL = daha cok DNS;
+     * daha uzun = CDN rotasinda gecici 403. TOCTOU icin baglanti hâlâ pin'li
+     * IP'ye gider, hostname'e degil.
+     */
+    public static final Duration PIN_TTL = Duration.ofMinutes(5);
+
+    private static final Logger log = LoggerFactory.getLogger(StorageUrlGuard.class);
+
+    private final Set<Origin> allowedOrigins;
+    private final List<String> originHosts;
+    private final Set<String> allowedBuckets;
+    private final Function<String, InetAddress[]> resolver;
+    private final Clock clock;
+    private final Duration pinTtl;
+
+    private final Object pinLock = new Object();
+    private volatile Set<InetAddress> pinnedIps;
+    private volatile Instant lastRefresh;
+
+    @Autowired
+    public StorageUrlGuard(StorageProperties properties) {
+        this(properties, StorageUrlGuard::defaultResolve, Clock.systemUTC(), PIN_TTL);
+    }
+
+    StorageUrlGuard(StorageProperties properties, Function<String, InetAddress[]> resolver) {
+        this(properties, resolver, Clock.systemUTC(), PIN_TTL);
+    }
+
+    StorageUrlGuard(
+            StorageProperties properties,
+            Function<String, InetAddress[]> resolver,
+            Clock clock,
+            Duration pinTtl) {
+        this.resolver = resolver;
+        this.clock = clock;
+        this.pinTtl = pinTtl == null ? PIN_TTL : pinTtl;
+        this.allowedOrigins = new LinkedHashSet<>();
+        this.originHosts = new ArrayList<>();
+        addOrigin(properties.endpoint());
+        addOrigin(properties.publicBaseUrl());
+        this.allowedBuckets = Set.of(
+                properties.wardrobeBucket(),
+                properties.vtonBucket(),
+                properties.avatarsBucket());
+        refreshPinnedIps();
+        log.info(
+                "StorageUrlGuard origins={} pinnedIps={} buckets={} pinTtl={}",
+                allowedOrigins,
+                pinnedIps,
+                allowedBuckets,
+                this.pinTtl);
+    }
+
+    public void rejectUnsafeObjectUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            return;
+        }
+        pin(rawUrl);
+    }
+
+    /**
+     * Allowlist + DNS pin. Donen IP'ler baglanti icin kullanilmali —
+     * hostname ile ikinci bir getAllByName TOCTOU acar.
+     */
+    public PinnedTarget pin(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            throw blocked("Gorsel URL bos");
+        }
+        String trimmed = rawUrl.trim();
+        if (trimmed.contains("..") || trimmed.toLowerCase(Locale.ROOT).contains("%2e%2e")) {
+            throw blocked("Gorsel URL yolu gecersiz");
+        }
+        URI uri;
+        try {
+            uri = URI.create(trimmed).normalize();
+        } catch (IllegalArgumentException exception) {
+            throw blocked("Gecersiz gorsel URL");
+        }
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (!scheme.equals("https") && !scheme.equals("http")) {
+            throw blocked("Gorsel URL yalniz http/https olabilir");
+        }
+        if (uri.getUserInfo() != null && !uri.getUserInfo().isBlank()) {
+            throw blocked("Gorsel URL kimlik bilgisi tasiyamaz");
+        }
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw blocked("Gorsel URL host eksik");
+        }
+        int port = uri.getPort();
+        if (port < 0) {
+            port = scheme.equals("https") ? 443 : 80;
+        }
+        Origin origin = new Origin(scheme, host.toLowerCase(Locale.ROOT), port);
+        if (!allowedOrigins.contains(origin)) {
+            throw blocked("Gorsel URL izin verilen depolama hostu degil");
+        }
+        List<InetAddress> verified = verifyResolvedIps(host);
+        rejectUnsafePath(uri.getRawPath());
+        String path = uri.getRawPath() == null || uri.getRawPath().isBlank() ? "/" : uri.getRawPath();
+        return new PinnedTarget(scheme, host, port, path, uri.getRawQuery(), verified);
+    }
+
+    private List<InetAddress> verifyResolvedIps(String host) {
+        refreshPinnedIpsIfStale();
+        InetAddress[] resolved = resolveOrBlock(host);
+        List<InetAddress> canonical = canonicalize(resolved);
+        if (allPinned(canonical)) {
+            return canonical;
+        }
+        // CDN/R2 A kaydi donmus olabilir — origin'i bir kez yenile, sonra fail-closed.
+        refreshPinnedIps();
+        if (allPinned(canonical)) {
+            return canonical;
+        }
+        throw blocked("Gorsel URL DNS hedefi depolama IP'si degil");
+    }
+
+    private boolean allPinned(List<InetAddress> resolved) {
+        Set<InetAddress> pinned = this.pinnedIps;
+        if (pinned == null || pinned.isEmpty() || resolved.isEmpty()) {
+            return false;
+        }
+        for (InetAddress address : resolved) {
+            if (!pinned.contains(address)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private InetAddress[] resolveOrBlock(String host) {
+        try {
+            InetAddress[] resolved = resolver.apply(host);
+            if (resolved == null || resolved.length == 0) {
+                throw blocked("Gorsel URL host cozulemedi");
+            }
+            return resolved;
+        } catch (UnsafeObjectUrlException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw blocked("Gorsel URL host cozulemedi");
+        }
+    }
+
+    void refreshPinnedIpsIfStale() {
+        Instant last = lastRefresh;
+        Instant now = clock.instant();
+        if (last != null && now.isBefore(last.plus(pinTtl))) {
+            return;
+        }
+        refreshPinnedIps();
+    }
+
+    void refreshPinnedIps() {
+        synchronized (pinLock) {
+            Set<InetAddress> next = new LinkedHashSet<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (String host : originHosts) {
+                if (!seen.add(host)) {
+                    continue;
+                }
+                try {
+                    InetAddress[] addresses = resolver.apply(host);
+                    next.addAll(canonicalize(addresses));
+                } catch (RuntimeException exception) {
+                    log.warn("StorageUrlGuard pin DNS basarisiz host={}: {}", host, exception.toString());
+                }
+            }
+            this.pinnedIps = next;
+            this.lastRefresh = clock.instant();
+        }
+    }
+
+    private void rejectUnsafePath(String rawPath) {
+        if (rawPath == null || rawPath.isBlank() || "/".equals(rawPath)) {
+            throw blocked("Gorsel URL yolu gecersiz");
+        }
+        String decoded;
+        try {
+            decoded = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            throw blocked("Gorsel URL yolu gecersiz");
+        }
+        if (decoded.contains("..") || rawPath.contains("..")) {
+            throw blocked("Gorsel URL yolu gecersiz");
+        }
+        String path = decoded.startsWith("/") ? decoded : "/" + decoded;
+        if (matchesMemoryPath(path) || matchesBucketPath(path)) {
+            return;
+        }
+        throw blocked("Gorsel URL bucket/yol sablonu uyusmuyor");
+    }
+
+    private boolean matchesMemoryPath(String path) {
+        if (!path.startsWith("/memory/")) {
+            return false;
+        }
+        return bucketAndKey(path.substring("/memory/".length()));
+    }
+
+    private boolean matchesBucketPath(String path) {
+        String trimmed = path.startsWith("/") ? path.substring(1) : path;
+        return bucketAndKey(trimmed);
+    }
+
+    private boolean bucketAndKey(String rest) {
+        int slash = rest.indexOf('/');
+        if (slash <= 0 || slash == rest.length() - 1) {
+            return false;
+        }
+        String bucket = rest.substring(0, slash);
+        String key = rest.substring(slash + 1);
+        if (!allowedBuckets.contains(bucket)) {
+            return false;
+        }
+        return !key.isBlank() && !key.contains("..");
+    }
+
+    private void addOrigin(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        try {
+            URI uri = URI.create(raw.trim());
+            String scheme = uri.getScheme() == null ? "http" : uri.getScheme().toLowerCase(Locale.ROOT);
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                log.warn("StorageUrlGuard origin host yok: {}", raw);
+                return;
+            }
+            int port = uri.getPort();
+            if (port < 0) {
+                port = "https".equals(scheme) ? 443 : 80;
+            }
+            allowedOrigins.add(new Origin(scheme, host.toLowerCase(Locale.ROOT), port));
+            originHosts.add(host);
+        } catch (IllegalArgumentException exception) {
+            log.warn("StorageUrlGuard origin parse edilemedi: {}", raw);
+        }
+    }
+
+    private static List<InetAddress> canonicalize(InetAddress[] addresses) {
+        List<InetAddress> out = new ArrayList<>();
+        if (addresses == null) {
+            return out;
+        }
+        for (InetAddress address : addresses) {
+            if (address == null) {
+                continue;
+            }
+            out.add(canonical(address));
+        }
+        return out;
+    }
+
+    static InetAddress canonical(InetAddress address) {
+        byte[] raw = address.getAddress();
+        if (address instanceof Inet6Address && isIpv4Mapped(raw)) {
+            raw = Arrays.copyOfRange(raw, 12, 16);
+        }
+        try {
+            return InetAddress.getByAddress(raw);
+        } catch (UnknownHostException exception) {
+            return address;
+        }
+    }
+
+    private static boolean isIpv4Mapped(byte[] raw) {
+        if (raw == null || raw.length != 16) {
+            return false;
+        }
+        for (int i = 0; i < 10; i++) {
+            if (raw[i] != 0) {
+                return false;
+            }
+        }
+        return raw[10] == (byte) 0xff && raw[11] == (byte) 0xff;
+    }
+
+    private static InetAddress[] defaultResolve(String host) {
+        try {
+            return InetAddress.getAllByName(host);
+        } catch (UnknownHostException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private static UnsafeObjectUrlException blocked(String message) {
+        return new UnsafeObjectUrlException("unsafe_url", message);
+    }
+
+    record Origin(String scheme, String host, int port) {}
+
+    /**
+     * Dogrulanmis baglanti hedefi — TCP {@link #connectIp()}, TLS SNI / Host
+     * header {@link #hostname()}.
+     */
+    public record PinnedTarget(
+            String scheme,
+            String hostname,
+            int port,
+            String path,
+            String query,
+            List<InetAddress> connectIps) {
+
+        public InetAddress connectIp() {
+            for (InetAddress ip : connectIps) {
+                if (ip instanceof Inet4Address) {
+                    return ip;
+                }
+            }
+            return connectIps.getFirst();
+        }
+
+        public String hostHeader() {
+            boolean defaultPort =
+                    ("https".equals(scheme) && port == 443) || ("http".equals(scheme) && port == 80);
+            return defaultPort ? hostname : hostname + ":" + port;
+        }
+
+        public URI ipUri() {
+            try {
+                InetAddress ip = connectIp();
+                String host = ip.getHostAddress();
+                int zone = host.indexOf('%');
+                if (zone >= 0) {
+                    host = host.substring(0, zone);
+                }
+                String normalizedPath = path == null || path.isBlank() ? "/" : path;
+                return new URI(scheme, null, host, port, normalizedPath, query, null);
+            } catch (Exception exception) {
+                throw new UnsafeObjectUrlException("unsafe_url", "Gorsel URL IP hedefi kurulamadi");
+            }
+        }
+    }
+}

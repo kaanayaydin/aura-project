@@ -50,6 +50,9 @@ class WardrobeServiceAlreadyNormalizedTest {
     @Mock
     private VisionGarmentClient visionGarmentClient;
 
+    @Mock
+    private app.aura.backend.support.PinnedHttpDownloader pinnedHttpDownloader;
+
     private WardrobeService wardrobeService;
 
     @BeforeEach
@@ -59,7 +62,8 @@ class WardrobeServiceAlreadyNormalizedTest {
                 userRepository,
                 new AuraProperties("demo", 10 * 1024 * 1024),
                 storageService,
-                visionGarmentClient);
+                visionGarmentClient,
+                pinnedHttpDownloader);
     }
 
     @Test

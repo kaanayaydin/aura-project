@@ -14,6 +14,7 @@ import app.aura.backend.repository.VtonJobRepository;
 import app.aura.backend.repository.WardrobeItemRepository;
 import app.aura.backend.service.VtonWorkerClient.WorkerStatusSnapshot;
 import app.aura.backend.support.Base64Images;
+import app.aura.backend.support.StorageUrlGuard;
 import app.aura.backend.web.ImageSafetyGate;
 import app.aura.backend.web.InvalidImagePayloadException;
 import app.aura.backend.web.UserNotFoundException;
@@ -55,6 +56,7 @@ public class VtonService {
     private final WardrobeGuardrailService wardrobeGuardrailService;
     private final VtonWorkerClient vtonWorkerClient;
     private final VtonQuotaService vtonQuotaService;
+    private final StorageUrlGuard storageUrlGuard;
     private final RestClient workerRestClient;
 
     public VtonService(
@@ -64,7 +66,8 @@ public class VtonService {
             VtonProperties vtonProperties,
             WardrobeGuardrailService wardrobeGuardrailService,
             VtonWorkerClient vtonWorkerClient,
-            VtonQuotaService vtonQuotaService) {
+            VtonQuotaService vtonQuotaService,
+            StorageUrlGuard storageUrlGuard) {
         this.vtonJobRepository = vtonJobRepository;
         this.wardrobeItemRepository = wardrobeItemRepository;
         this.userRepository = userRepository;
@@ -72,6 +75,7 @@ public class VtonService {
         this.wardrobeGuardrailService = wardrobeGuardrailService;
         this.vtonWorkerClient = vtonWorkerClient;
         this.vtonQuotaService = vtonQuotaService;
+        this.storageUrlGuard = storageUrlGuard;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(vtonProperties.connectTimeoutSeconds()));
         factory.setReadTimeout(Duration.ofSeconds(vtonProperties.readTimeoutSeconds()));
@@ -214,10 +218,11 @@ public class VtonService {
     }
 
     /**
-     * personImageBase64 ve dolap giysisi — piksel limiti, decode yok.
-     * DTO {@code @Size(max=20_000_000)} yalnızca bayt; 30k×30k PNG ~1KB geçer.
+     * personImageUrl allowlist (SSRF) + base64 piksel limiti — kota/enqueue oncesi.
      */
-    private static void rejectUnsafeVtonImages(VtonRequest request, WardrobeItem item) {
+    private void rejectUnsafeVtonImages(VtonRequest request, WardrobeItem item) {
+        storageUrlGuard.rejectUnsafeObjectUrl(request.personImageUrl());
+        storageUrlGuard.rejectUnsafeObjectUrl(item.getImageUrl());
         if (request.personImageBase64() != null && !request.personImageBase64().isBlank()) {
             rejectDecodedBase64(request.personImageBase64());
         }

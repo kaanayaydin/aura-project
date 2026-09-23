@@ -77,3 +77,18 @@ Header parse edilemeyen format (≥24 bayt, ImageIO + WebP/BMP magic yok) fail-c
 ## Java `inspect()` OOM catch — ölü savunma ağı
 
 `OutOfMemoryError` yakalanır ve `DECODE_FAILED` döner; header limiti + 512px altörnekleme sonrası yasal görseller `-Xmx24m`’de bile bu yola girmez. `outOfMemoryMappingIsDeadDefensiveNet` gerçek heap OOM tetiklemez, yalnızca eşlemeyi kilitler. Canlı OOM kanıtı değildir.
+
+## VTON / Wardrobe object URL SSRF
+
+`personImageUrl` ve wardrobe `imageUrl` yalnızca `aura.storage.endpoint` / `public-base-url` origin’ine ve `wardrobe|vton|avatars` bucket yol şablonuna izin verir. DNS: origin IP’leri `PIN_TTL=5dk` ile yenilenir; istekte host bir kez çözülür ve **TCP o IP’ye** açılır (hostname ile ikinci çözüm TOCTOU / rebinding). Host header ve TLS SNI orijinal hostname kalır. `127.0.0.1:8001` ve `169.254.169.254` allowlist dışı. Wardrobe indirme `PinnedHttpDownloader` (stream tavanı `maxImageBytes`, Content-Length önce). Worker `image_fetch` aynı pin + httplib SNI.
+
+## Test edilmemiş mutasyon yüzeyi
+
+Bu turda kapatılan: S2 (`item.getImageUrl()` kapısı — metadata giysi URL 403 + spy), S6 (stream tavanı gövdeyi belleğe almadan), S7 (imageUrl indirilemezse 201 ile URL kaydetme kaldırıldı), P3 (bağlantı pin’li IP), P4 (5dk pin yenileme), P6 (Host header hostname), P7 (Python IP rewrite + TOCTOU test), K8 (önceki tur, ≥24 garbage 422).
+
+Açık bırakılan:
+
+- **P8:** TLS SNI uygulandı (`SSLSocket` / `wrap_socket(server_hostname=…)`); canlı HTTPS sertifika ile rebinding kanıtı yok (testler HTTP).
+- **VtonService.resolveResultBytes:** worker `resultImageUri` (`http://127.0.0.1:8001/outputs/…`) StorageUrlGuard dışı, `RestClient` gövdeyi sınırsız okur. Kullanıcı URL’si değil; worker origin ayrı allowlist değil.
+- Origin hostname DNS’inin tamamen zehirlenmesi (pin refresh + istek çözümü aynı anda 169.254) — operasyonel CDN zehri, klasik rebinding değil.
+

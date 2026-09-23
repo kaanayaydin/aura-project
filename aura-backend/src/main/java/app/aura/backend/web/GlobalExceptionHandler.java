@@ -112,6 +112,16 @@ public class GlobalExceptionHandler {
                 exception.getMessage());
     }
 
+    @ExceptionHandler(UnsafeObjectUrlException.class)
+    public ProblemDetail handleUnsafeObjectUrl(UnsafeObjectUrlException exception) {
+        ProblemDetail detail = problem(
+                HttpStatus.FORBIDDEN,
+                "Gorsel URL reddedildi",
+                exception.getMessage());
+        detail.setProperty("rejected_reason", exception.getRejectedReason());
+        return detail;
+    }
+
     @ExceptionHandler(WardrobeOwnershipException.class)
     public ProblemDetail handleWardrobeOwnership(WardrobeOwnershipException exception) {
         return problem(HttpStatus.FORBIDDEN, "Dolap erisim engeli", exception.getMessage());
