@@ -10,7 +10,8 @@ public record AuthProperties(
         int maxFailedAttempts,
         int lockDurationMinutes,
         int rateLimitPerMinute,
-        int refreshExpirationDays) {
+        int refreshExpirationDays,
+        String rateLimitStore) {
 
     public AuthProperties {
         if (maxFailedAttempts <= 0) {
@@ -20,10 +21,18 @@ public record AuthProperties(
             lockDurationMinutes = 15;
         }
         if (rateLimitPerMinute <= 0) {
-            rateLimitPerMinute = 10;
+            rateLimitPerMinute = 5;
         }
         if (refreshExpirationDays <= 0) {
             refreshExpirationDays = 7;
+        }
+        if (refreshExpirationDays > 30) {
+            refreshExpirationDays = 30;
+        }
+        if (rateLimitStore == null || rateLimitStore.isBlank()) {
+            rateLimitStore = "redis";
+        } else {
+            rateLimitStore = rateLimitStore.trim().toLowerCase();
         }
     }
 }

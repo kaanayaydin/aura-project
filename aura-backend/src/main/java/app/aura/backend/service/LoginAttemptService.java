@@ -55,16 +55,13 @@ public class LoginAttemptService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onLoginSuccess(Long userId) {
         User user = userRepository.findById(userId).orElseThrow();
-        if (user.getFailedLoginAttempts() != 0
-                || user.getLockedUntil() != null
-                || user.getAccountStatus() == AccountStatus.LOCKED) {
-            user.setFailedLoginAttempts(0);
-            user.setLockedUntil(null);
-            if (user.getAccountStatus() == AccountStatus.LOCKED) {
-                user.setAccountStatus(AccountStatus.ACTIVE);
-            }
-            userRepository.save(user);
+        user.setLastLoginAt(Instant.now());
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        if (user.getAccountStatus() == AccountStatus.LOCKED) {
+            user.setAccountStatus(AccountStatus.ACTIVE);
         }
+        userRepository.save(user);
     }
 
     /**

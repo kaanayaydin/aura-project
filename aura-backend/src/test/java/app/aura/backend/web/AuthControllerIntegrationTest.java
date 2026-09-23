@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.aura.backend.model.AccountStatus;
+import app.aura.backend.model.RefreshToken;
 import app.aura.backend.model.User;
+import app.aura.backend.repository.RefreshTokenRepository;
 import app.aura.backend.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +41,9 @@ class AuthControllerIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Test
     void registerLoginProtectedRefreshLogoutAndDetectRefreshReuse() throws Exception {
@@ -74,6 +79,9 @@ class AuthControllerIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
+
+        User loggedIn = userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(loggedIn.getLastLoginAt()).isNotNull();
 
         MvcResult refreshResult = mockMvc.perform(post("/api/v1/aura/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -114,6 +122,72 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    void reusedRefreshTokenRevokesEverySession() throws Exception {
+        String email = "replay-all-" + System.nanoTime() + "@aura.app";
+        mockMvc.perform(post("/api/v1/aura/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","displayName":"Replay User"}
+                                """.formatted(email, STRONG_PASSWORD)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").exists())
+                .andExpect(jsonPath("$.email").value(email));
+
+        JsonNode first = login(email);
+        String refreshA = first.get("refreshToken").asText();
+        JsonNode rotated = objectMapper.readTree(mockMvc.perform(post("/api/v1/aura/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshA)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        String refreshB = rotated.get("refreshToken").asText();
+
+        JsonNode second = login(email);
+        String refreshC = second.get("refreshToken").asText();
+
+        mockMvc.perform(post("/api/v1/aura/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshA)))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/aura/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshB)))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/aura/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshC)))
+                .andExpect(status().isUnauthorized());
+
+        User owner = userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(owner.getUsername()).contains("replay");
+        org.assertj.core.api.Assertions.assertThat(refreshTokenRepository.findByUserId(owner.getId()))
+                .isNotEmpty()
+                .allMatch(RefreshToken::isRevoked);
+    }
+
+    private JsonNode login(String email) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/aura/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","deviceInfo":"junit"}
+                                """.formatted(email, STRONG_PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    @Test
     void logoutBlacklistsAccessTokenUntilExpiry() throws Exception {
         String email = "blacklist-" + System.nanoTime() + "@aura.app";
         registerAndLogin(email, STRONG_PASSWORD);
@@ -145,6 +219,35 @@ class AuthControllerIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Kimlik dogrulamasi gerekli"));
+    }
+
+    @Test
+    void unknownEmailAndWrongPasswordShareGenericMessage() throws Exception {
+        String email = "enum-" + System.nanoTime() + "@aura.app";
+        mockMvc.perform(post("/api/v1/aura/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, STRONG_PASSWORD)))
+                .andExpect(status().isCreated());
+
+        String wrongDetail = loginDetail(email, "WrongPass9");
+        String missingDetail = loginDetail("nobody-" + System.nanoTime() + "@aura.app", STRONG_PASSWORD);
+
+        org.assertj.core.api.Assertions.assertThat(missingDetail)
+                .isEqualTo(wrongDetail)
+                .isEqualTo("Email veya sifre hatali.");
+    }
+
+    private String loginDetail(String email, String password) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/aura/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, password)))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("detail").asText();
     }
 
     @Test

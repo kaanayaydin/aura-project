@@ -15,5 +15,9 @@ public record LoginRequest(
 
         @NotBlank(message = "password zorunludur")
         @Size(max = 128)
-        String password) {
+        String password,
+
+        /** Opsiyonel; refresh_tokens.device_info. */
+        @Size(max = 255)
+        String deviceInfo) {
 }

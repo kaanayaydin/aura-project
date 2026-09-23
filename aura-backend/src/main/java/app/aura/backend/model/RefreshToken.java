@@ -6,6 +6,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -17,7 +18,11 @@ import java.util.UUID;
  * Refresh token kaydi — ham token asla saklanmaz, yalnizca SHA-256 hash.
  */
 @Entity
-@Table(name = "refresh_tokens")
+@Table(
+        name = "refresh_tokens",
+        indexes = @Index(
+                name = "idx_refresh_user_revoked_expires",
+                columnList = "user_id, revoked, expires_at"))
 public class RefreshToken {
 
     @Id
@@ -31,11 +36,22 @@ public class RefreshToken {
     @Column(name = "token_hash", nullable = false, unique = true, length = 64)
     private String tokenHash;
 
+    /**
+     * Sema nullable. Hibernate ddl-auto=update dolu Postgres tablosuna
+     * NOT NULL kolon ekleyemez; ALTER kesilir, login 500 olur.
+     * Yeni satirlarda constructor ve {@link #onCreate()} doldurur.
+     */
+    @Column(name = "issued_at")
+    private Instant issuedAt;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
     @Column(nullable = false)
     private boolean revoked = false;
+
+    @Column(name = "device_info", length = 255)
+    private String deviceInfo;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -43,16 +59,24 @@ public class RefreshToken {
     protected RefreshToken() {
     }
 
-    public RefreshToken(User user, String tokenHash, Instant expiresAt) {
+    public RefreshToken(User user, String tokenHash, Instant expiresAt, String deviceInfo) {
         this.user = user;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
+        this.deviceInfo = deviceInfo;
+        Instant now = Instant.now();
+        this.issuedAt = now;
+        this.createdAt = now;
     }
 
     @PrePersist
     void onCreate() {
+        Instant now = Instant.now();
+        if (issuedAt == null) {
+            issuedAt = now;
+        }
         if (createdAt == null) {
-            createdAt = Instant.now();
+            createdAt = issuedAt;
         }
     }
 
@@ -76,8 +100,16 @@ public class RefreshToken {
         return tokenHash;
     }
 
+    public Instant getIssuedAt() {
+        return issuedAt;
+    }
+
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public String getDeviceInfo() {
+        return deviceInfo;
     }
 
     public boolean isRevoked() {

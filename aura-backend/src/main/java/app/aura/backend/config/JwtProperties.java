@@ -17,10 +17,11 @@ public record JwtProperties(
 
     public JwtProperties {
         if (secret == null || secret.isBlank()) {
-            secret = "aura-dev-jwt-secret-change-me-32chars!!";
+            throw new IllegalStateException(
+                    "AURA_JWT_SECRET zorunlu. Varsayilan secret yok; env set edilmeden uygulama baslamaz.");
         }
         if (secret.length() < 32) {
-            secret = (secret + "aura-dev-jwt-secret-padding-32+").substring(0, 32);
+            throw new IllegalStateException("AURA_JWT_SECRET en az 32 karakter olmali.");
         }
         if (expirationMinutes <= 0) {
             expirationMinutes = 15;

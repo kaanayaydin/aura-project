@@ -15,7 +15,10 @@ import java.util.HexFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Refresh token uretim, hash saklama ve rotasyon (theft detection).
@@ -28,12 +31,16 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final AuthProperties authProperties;
+    private final TransactionTemplate requiresNew;
 
     public RefreshTokenService(
             RefreshTokenRepository refreshTokenRepository,
-            AuthProperties authProperties) {
+            AuthProperties authProperties,
+            PlatformTransactionManager transactionManager) {
         this.refreshTokenRepository = refreshTokenRepository;
         this.authProperties = authProperties;
+        this.requiresNew = new TransactionTemplate(transactionManager);
+        this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public record IssuedRefresh(String rawToken, RefreshToken entity) {
@@ -41,10 +48,16 @@ public class RefreshTokenService {
 
     @Transactional
     public IssuedRefresh issue(User user) {
+        return issue(user, null);
+    }
+
+    @Transactional
+    public IssuedRefresh issue(User user, String deviceInfo) {
         String raw = generateRawToken();
         Instant expiresAt = Instant.now()
                 .plusSeconds(authProperties.refreshExpirationDays() * 86_400L);
-        RefreshToken entity = new RefreshToken(user, sha256Hex(raw), expiresAt);
+        String device = deviceInfo == null || deviceInfo.isBlank() ? null : deviceInfo.trim();
+        RefreshToken entity = new RefreshToken(user, sha256Hex(raw), expiresAt, device);
         refreshTokenRepository.save(entity);
         return new IssuedRefresh(raw, entity);
     }
@@ -60,10 +73,8 @@ public class RefreshTokenService {
 
         if (token.isRevoked()) {
             Long userId = token.getUser().getId();
-            int revoked = refreshTokenRepository.revokeAllActiveForUser(userId);
-            log.warn(
-                    "Refresh token replay / hirsizlik: userId={} iptalEdilenAktif={}",
-                    userId, revoked);
+            requiresNew.executeWithoutResult(status -> refreshTokenRepository.revokeAllActiveForUser(userId));
+            log.warn("Refresh token replay / hirsizlik: userId={} tum oturumlar iptal", userId);
             throw new UnauthorizedException(
                     "Refresh token yeniden kullanildi; tum oturumlar sonlandirildi.");
         }
@@ -80,7 +91,7 @@ public class RefreshTokenService {
         RefreshToken current = requireUsable(rawToken);
         current.revoke();
         refreshTokenRepository.save(current);
-        return issue(current.getUser());
+        return issue(current.getUser(), current.getDeviceInfo());
     }
 
     @Transactional

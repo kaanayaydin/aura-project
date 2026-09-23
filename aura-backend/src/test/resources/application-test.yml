@@ -62,4 +62,5 @@ aura:
       max-failed-attempts: 5
       lock-duration-minutes: 15
       rate-limit-per-minute: 1000
+      rate-limit-store: memory
       refresh-expiration-days: 7

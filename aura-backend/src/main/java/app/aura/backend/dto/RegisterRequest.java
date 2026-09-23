@@ -23,5 +23,9 @@ public record RegisterRequest(
         @Pattern(
                 regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$",
                 message = "password en az 1 buyuk, 1 kucuk, 1 rakam ve 1 ozel karakter icermelidir")
-        String password) {
+        String password,
+
+        /** Opsiyonel gorunen ad; yoksa email yerel kismi username olur. */
+        @Size(max = 80)
+        String displayName) {
 }

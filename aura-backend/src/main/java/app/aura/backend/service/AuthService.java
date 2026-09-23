@@ -83,7 +83,9 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new AuthConflictException("Bu email zaten kayitli.");
         }
-        String username = deriveUsername(email);
+        String username = request.displayName() != null && !request.displayName().isBlank()
+                ? deriveUsername(request.displayName().trim().toLowerCase())
+                : deriveUsername(email);
         if (userRepository.existsByUsernameIgnoreCase(username)) {
             username = username + "_" + System.currentTimeMillis() % 10_000;
         }
@@ -118,9 +120,8 @@ public class AuthService {
         }
 
         loginAttemptService.onLoginSuccess(user.getId());
-        // reload after attempt counter reset
         user = userRepository.findById(user.getId()).orElseThrow();
-        return issueSession(user);
+        return issueSession(user, request.deviceInfo());
     }
 
     @Transactional
@@ -147,9 +148,9 @@ public class AuthService {
         log.info("Logout: userId={} accessToken blacklisted", authenticatedUserId);
     }
 
-    private AuthSessionResponse issueSession(User user) {
+    private AuthSessionResponse issueSession(User user, String deviceInfo) {
         String access = jwtService.issueToken(user.getId(), user.getUsername());
-        var refresh = refreshTokenService.issue(user);
+        var refresh = refreshTokenService.issue(user, deviceInfo);
         return new AuthSessionResponse(
                 access,
                 refresh.rawToken(),

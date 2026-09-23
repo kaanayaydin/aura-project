@@ -54,6 +54,9 @@ public class User {
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     /** Gunluk VTON deneme sayaci (maliyet korumasi). */
     @Column(name = "daily_vton_count", nullable = false)
     private int dailyVtonCount = 0;
@@ -168,6 +171,14 @@ public class User {
 
     public void setLockedUntil(Instant lockedUntil) {
         this.lockedUntil = lockedUntil;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public void setLastLoginAt(Instant lastLoginAt) {
+        this.lastLoginAt = lastLoginAt;
     }
 
     public int getDailyVtonCount() {

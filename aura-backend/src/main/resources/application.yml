@@ -9,13 +9,20 @@ spring:
     password: ${AURA_DB_PASSWORD:aura}
     driver-class-name: org.postgresql.Driver
 
+  data:
+    redis:
+      host: ${AURA_REDIS_HOST:127.0.0.1}
+      port: ${AURA_REDIS_PORT:6379}
+      repositories:
+        enabled: false
+
   # Base64 kesimler istek govdesini buyutuyor
   servlet:
     multipart:
       max-request-size: 20MB
 
   jpa:
-    # MVP asamasinda semayi Hibernate uretiyor; ilk kalici surumde Flyway'e gecilecek.
+    # Sema Hibernate ddl-auto=update ile guncellenir (Flyway/Liquibase yok).
     hibernate:
       ddl-auto: update
     open-in-view: false
@@ -75,14 +82,16 @@ aura:
     daily-limit: ${AURA_VTON_DAILY_LIMIT:5}
   security:
     jwt:
-      secret: ${AURA_JWT_SECRET:aura-dev-jwt-secret-change-me-32chars!!}
+      secret: ${AURA_JWT_SECRET}
       # Access token: 15 dakika
       expiration-minutes: ${AURA_JWT_EXPIRATION_MINUTES:15}
       issuer: ${AURA_JWT_ISSUER:aura-backend}
     auth:
       max-failed-attempts: ${AURA_AUTH_MAX_FAILED:5}
       lock-duration-minutes: ${AURA_AUTH_LOCK_MINUTES:15}
-      rate-limit-per-minute: ${AURA_AUTH_RATE_LIMIT:10}
+      # register / login / refresh — IP basina dakikada 5
+      rate-limit-per-minute: ${AURA_AUTH_RATE_LIMIT:5}
+      rate-limit-store: ${AURA_AUTH_RATE_LIMIT_STORE:redis}
       refresh-expiration-days: ${AURA_AUTH_REFRESH_DAYS:7}
   storage:
     # memory = test/offline; s3 = MinIO veya Cloudflare R2

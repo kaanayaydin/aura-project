@@ -1,18 +1,16 @@
 package app.aura.backend.security;
 
-import app.aura.backend.config.AuthProperties;
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
@@ -20,25 +18,29 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Auth endpoint'lerine IP bazli Bucket4j rate-limit.
+ * register / login / refresh icin IP basli Bucket4j limiti.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class AuthRateLimitFilter extends OncePerRequestFilter {
 
-    private static final String AUTH_PREFIX = "/api/v1/aura/auth/";
+    private static final Set<String> LIMITED = Set.of(
+            "/api/v1/aura/auth/register",
+            "/api/v1/aura/auth/login",
+            "/api/v1/aura/auth/refresh");
 
-    private final AuthProperties authProperties;
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final AuthRateLimitBuckets buckets;
+    private final ObjectMapper objectMapper;
 
-    public AuthRateLimitFilter(AuthProperties authProperties) {
-        this.authProperties = authProperties;
+    public AuthRateLimitFilter(AuthRateLimitBuckets buckets, ObjectMapper objectMapper) {
+        this.buckets = buckets;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path == null || !path.startsWith(AUTH_PREFIX);
+        return path == null || !LIMITED.contains(path);
     }
 
     @Override
@@ -46,27 +48,20 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
-        String ip = clientIp(request);
-        Bucket bucket = buckets.computeIfAbsent(ip, ignored -> newBucket());
-        if (!bucket.tryConsume(1)) {
+        if (!buckets.tryConsume(clientIp(request))) {
             response.setStatus(429);
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
             response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-            String body = """
-                    {"title":"Cok fazla istek","status":429,"detail":"Auth istek limiti asildi. Bir dakika sonra tekrar deneyin.","timestamp":"%s"}
-                    """.formatted(Instant.now()).strip();
-            response.getWriter().write(body);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("type", "about:blank");
+            body.put("title", "Cok fazla istek");
+            body.put("status", 429);
+            body.put("detail", "Auth istek limiti asildi. Bir dakika sonra tekrar deneyin.");
+            body.put("timestamp", Instant.now().toString());
+            objectMapper.writeValue(response.getWriter(), body);
             return;
         }
         filterChain.doFilter(request, response);
-    }
-
-    private Bucket newBucket() {
-        Bandwidth limit = Bandwidth.builder()
-                .capacity(authProperties.rateLimitPerMinute())
-                .refillGreedy(authProperties.rateLimitPerMinute(), Duration.ofMinutes(1))
-                .build();
-        return Bucket.builder().addLimit(limit).build();
     }
 
     private static String clientIp(HttpServletRequest request) {
