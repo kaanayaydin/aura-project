@@ -71,6 +71,11 @@ Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile
 
 **Çıkış kriteri:** VTON, dar bir demo setinin ötesinde, çeşitli gerçek kullanıcı fotoğraflarında güvenilir sonuç veriyor; maliyetler öngörülebilir.
 
+- [ ] (Ertelendi, kapalı beta sonrası değerlendirilecek) Egress proxy /
+      ağ seviyesi SSRF savunması — RunPod Serverless'ta native security
+      group/network policy yok, bunun için ayrı bir proxy servisi
+      gerekir. Kod-seviyesi savunma (StorageUrlGuard, PinnedHttpDownloader)
+      şu an tek hat; gerçek trafik hacmi görülünce önceliklendirilecek.
 ---
 
 ## Faz 4 — "3D İncele" Özelliği (Hızlı Kazanım, Faz 3 ile paralel başlanabilir, 1-2 hafta)
