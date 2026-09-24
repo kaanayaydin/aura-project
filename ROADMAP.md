@@ -32,9 +32,12 @@ Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile
       env set edilmezse uygulama başlamıyor)
 - [x] Enumeration-önleme (bilinmeyen email/yanlış şifre aynı mesaj)
 
-### 1b. Cloud GPU Endpoint (~1 hafta)
-- [ ] RunPod Serverless veya Modal'a VTON worker deploy
-- [ ] Java tarafında timeout + retry + cold-start toleransı
+### 1b. Cloud GPU Endpoint (~1 hafta) ✅ RunPod deploy + timeout/retry tamamlandı (2026-09-24)
+- [x] RunPod Serverless veya Modal'a VTON worker deploy
+      (mock modda, gerçek endpoint ile uçtan uca doğrulandı:
+      register→login→VTON isteği→RunPod→COMPLETED→DB, 54.8s toplam)
+- [x] Java tarafında timeout + retry + cold-start toleransı
+      (120sn limit, gerçek cold-start senaryosunda sorunsuz)
 - [x] Kullanıcı bazlı VTON kota sayacı (günlük sabit limit, AURA_VTON_DAILY_LIMIT
       varsayılan 5; HTTP 429, gerçek testlerle doğrulandı — VtonQuotaServiceTest,
       VtonQuotaControllerTest, mutasyon testiyle kilit teyit edildi)
