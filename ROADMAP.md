@@ -34,8 +34,11 @@ Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile
 
 ### 1b. Cloud GPU Endpoint (~1 hafta) ✅ RunPod deploy + timeout/retry tamamlandı (2026-09-24)
 - [x] RunPod Serverless veya Modal'a VTON worker deploy
-      (mock modda, gerçek endpoint ile uçtan uca doğrulandı:
-      register→login→VTON isteği→RunPod→COMPLETED→DB, 54.8s toplam)
+      (mock modda uçtan uca test edildi: register→login→VTON isteği→
+      COMPLETED→DB — DB kaydı bağımsız denetimle doğrulandı [vton_jobs
+      id=16, user 3]. RunPod endpoint'inin gerçekten kullanıldığı ve
+      54.8s sürenin ölçümü RunPod dashboard/backend log gözlemine
+      dayanıyor, bağımsız üçüncü taraf kanıtı yok.)
 - [x] Java tarafında timeout + retry + cold-start toleransı
       (120sn limit, gerçek cold-start senaryosunda sorunsuz)
 - [x] Kullanıcı bazlı VTON kota sayacı (günlük sabit limit, AURA_VTON_DAILY_LIMIT
