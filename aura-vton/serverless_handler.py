@@ -46,6 +46,8 @@ def handle_job(payload: dict[str, Any]) -> dict[str, Any]:
     job_id = str(payload.get("jobId") or payload.get("id") or uuid.uuid4())
     person = payload.get("personImageBase64") or payload.get("person_image_base64")
     garment = payload.get("garmentImageBase64") or payload.get("garment_image_base64")
+    person_url = payload.get("personImageUrl") or payload.get("person_image_url")
+    garment_url = payload.get("garmentImageUrl") or payload.get("garment_image_url")
     cloth_type = (payload.get("clothType") or payload.get("cloth_type") or "upper")
     if isinstance(cloth_type, str):
         cloth_type = cloth_type.strip().lower() or "upper"
@@ -60,11 +62,14 @@ def handle_job(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     try:
+        _guard_object_urls(person_url, garment_url)
         catvton_loader.ensure_ready()
         result = catvton_loader.try_on(
             job_id=job_id,
             person_image_base64=person,
             garment_image_base64=garment,
+            person_image_url=person_url,
+            garment_image_url=garment_url,
             cloth_type=cloth_type,
         )
         elapsed_ms = int((time.time() - started) * 1000)
@@ -98,6 +103,15 @@ def handle_job(payload: dict[str, Any]) -> dict[str, Any]:
             "status": "FAILED",
             "errorMessage": str(exc),
         }
+
+
+def _guard_object_urls(*urls: str | None) -> None:
+    """RunPod uzerinde de Java StorageUrlGuard esdegeri (pin + allowlist)."""
+    from app.services.url_allowlist import assert_object_url_allowed
+
+    for url in urls:
+        if url and str(url).strip():
+            assert_object_url_allowed(str(url))
 
 
 def runpod_handler(event: dict[str, Any]) -> dict[str, Any]:

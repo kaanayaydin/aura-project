@@ -3,8 +3,13 @@
 # Yerel mock (ucretsiz, CUDA yok):
 #   docker build --build-arg BASE_IMAGE=python:3.11-slim-bookworm --build-arg INSTALL_ML=false -t aura-vton:local .
 #
-# GPU uretim:
-#   docker build --build-arg INSTALL_ML=true -t aura-vton:gpu .
+# GPU / RunPod Serverless (CUDA 12.1, base imajdaki torch korunur):
+#   docker build --build-arg INSTALL_ML=true --build-arg MOCK_MODEL=false \
+#     --build-arg EXECUTION_MODE=serverless --build-arg PREWARM_ON_BUILD=true \
+#     -t aura-vton:gpu .
+# PREWARM_ON_BUILD CatVTON + SD inpaint + SCHP agirliklarini imaja gomer
+# (~6-10 GB, cold-start'ta HF indirmesi kalkar). Kapali birakilirsa imaj kucuk
+# kalir, ilk istek agirliklari runtime'da indirir.
 #
 # EXECUTION_MODE=api|celery|serverless|prewarm
 
@@ -19,13 +24,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     AURA_VTON_OUTPUT_DIR=/root/.cache/aura-vton/outputs \
     HF_HOME=/root/.cache/aura-vton/hf \
     HUGGINGFACE_HUB_CACHE=/root/.cache/aura-vton/hf/hub \
-    EXECUTION_MODE=api \
-    AURA_VTON_MOCK_MODEL=true \
     AURA_VTON_PREWARM=false \
     AURA_VTON_PORT=8001
 
 ARG INSTALL_ML=false
 ARG PREWARM_ON_BUILD=false
+ARG MOCK_MODEL=true
+ARG EXECUTION_MODE=api
+ENV AURA_VTON_MOCK_MODEL=${MOCK_MODEL} \
+    EXECUTION_MODE=${EXECUTION_MODE}
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,9 +46,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt requirements-ml.txt ./
+# CUDA base imajindaki torch'u PyPI CPU tekerlegi ile ezme.
 RUN pip install -r requirements.txt \
     && if [ "$INSTALL_ML" = "true" ]; then \
-         pip install -r requirements-ml.txt; \
+         grep -v -E '^torch' requirements-ml.txt > /tmp/requirements-ml-cuda.txt \
+         && pip install -r /tmp/requirements-ml-cuda.txt; \
        else \
          pip install "numpy>=1.26.0"; \
        fi

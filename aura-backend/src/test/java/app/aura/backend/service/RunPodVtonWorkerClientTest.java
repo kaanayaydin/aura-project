@@ -7,6 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import app.aura.backend.config.VtonProperties;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -144,6 +146,31 @@ class RunPodVtonWorkerClientTest {
         server.verify();
     }
 
+    @Test
+    void enqueueRetriesOnceOn502ThenFails() {
+        server.expect(requestTo("https://api.runpod.ai/v2/endpoint-xyz/run"))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+        server.expect(requestTo("https://api.runpod.ai/v2/endpoint-xyz/run"))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+
+        assertThatThrownBy(() -> client.enqueue(samplePayload()))
+                .isInstanceOf(VtonWorkerUnavailableException.class)
+                .hasMessageContaining("erisilemiyor");
+        assertThat(sleepCalls.get()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    void unsetReadTimeoutIsInferencePlusColdStartAllowance() {
+        VtonProperties properties = new VtonProperties(
+                false, false, "runpod", "https://api.runpod.ai/v2/endpoint-xyz", "k",
+                "/run", "/status/{id}", 10, 0, 0, 0, 0, true, 0L, 5);
+        assertThat(properties.inferenceTimeoutSeconds()).isEqualTo(90);
+        assertThat(properties.coldStartAllowanceSeconds()).isEqualTo(30);
+        assertThat(properties.readTimeoutSeconds()).isEqualTo(120);
+        assertThat(properties.coldStartRetryDelayMs()).isEqualTo(2000L);
+    }
+
     private static VtonWorkerClient.EnqueuePayload samplePayload() {
         return new VtonWorkerClient.EnqueuePayload(1L, 1L, 1L, "p", "g", null, null, "upper");
     }
@@ -158,6 +185,8 @@ class RunPodVtonWorkerClientTest {
                 "/run",
                 "/status/{id}",
                 10,
+                90,
+                30,
                 180,
                 30,
                 retryEnabled,

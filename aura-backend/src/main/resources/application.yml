@@ -73,11 +73,14 @@ aura:
     status-path-template: ${AURA_VTON_STATUS_PATH:/status/{id}}
     # Cold-start / GPU inference icin genis timeout (saniye)
     connect-timeout-seconds: ${AURA_VTON_CONNECT_TIMEOUT:10}
-    read-timeout-seconds: ${AURA_VTON_READ_TIMEOUT:180}
+    # 0: read = inference + cold-start payi (90+30). Acik deger bunu ezer.
+    inference-timeout-seconds: ${AURA_VTON_INFERENCE_TIMEOUT:90}
+    cold-start-allowance-seconds: ${AURA_VTON_COLD_START_ALLOWANCE:30}
+    read-timeout-seconds: ${AURA_VTON_READ_TIMEOUT:0}
     status-read-timeout-seconds: ${AURA_VTON_STATUS_TIMEOUT:30}
-    # Ilk timeout/ag hatasinda 1 retry + backoff (ms)
+    # 5xx veya timeout: 1 retry, 2 sn bekleyip tekrar. Ikinci hata kota iadesi.
     cold-start-retry-enabled: ${AURA_VTON_COLD_RETRY:true}
-    cold-start-retry-delay-ms: ${AURA_VTON_COLD_RETRY_MS:3000}
+    cold-start-retry-delay-ms: ${AURA_VTON_COLD_RETRY_MS:2000}
     # Kullanici basina gunluk VTON deneme limiti (maliyet korumasi)
     daily-limit: ${AURA_VTON_DAILY_LIMIT:5}
   security:

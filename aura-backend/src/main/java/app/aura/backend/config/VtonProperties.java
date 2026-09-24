@@ -13,11 +13,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param apiKey                   RunPod Bearer anahtari (AURA_RUNPOD_API_KEY)
  * @param runPath                  Is baslatma yolu (varsayilan /run)
  * @param statusPathTemplate       Durum yolu sablonu ({id} yer tutucu)
- * @param connectTimeoutSeconds    TCP baglanti zaman asimi
- * @param readTimeoutSeconds       enqueue / uzun is (cold-start + inference)
- * @param statusReadTimeoutSeconds status poll okuma zaman asimi
- * @param coldStartRetryEnabled    Timeout/ag hatasinda 1 retry
- * @param coldStartRetryDelayMs    Ilk retry oncesi bekleme (ms)
+ * @param connectTimeoutSeconds       TCP baglanti zaman asimi
+ * @param inferenceTimeoutSeconds     Normal GPU inference butcesi (saniye)
+ * @param coldStartAllowanceSeconds   Uyuyan worker icin ek bekleme (saniye)
+ * @param readTimeoutSeconds          enqueue okuma; 0 ise inference + cold-start
+ * @param statusReadTimeoutSeconds    status poll okuma zaman asimi
+ * @param coldStartRetryEnabled       5xx/timeout sonrasi 1 retry
+ * @param coldStartRetryDelayMs       Retry oncesi bekleme (ms)
  * @param dailyLimit               Kullanici basina gunluk VTON kotasi (varsayilan 5)
  */
 @ConfigurationProperties(prefix = "aura.vton")
@@ -30,6 +32,8 @@ public record VtonProperties(
         String runPath,
         String statusPathTemplate,
         int connectTimeoutSeconds,
+        int inferenceTimeoutSeconds,
+        int coldStartAllowanceSeconds,
         int readTimeoutSeconds,
         int statusReadTimeoutSeconds,
         Boolean coldStartRetryEnabled,
@@ -57,8 +61,14 @@ public record VtonProperties(
         if (connectTimeoutSeconds <= 0) {
             connectTimeoutSeconds = 10;
         }
+        if (inferenceTimeoutSeconds <= 0) {
+            inferenceTimeoutSeconds = 90;
+        }
+        if (coldStartAllowanceSeconds <= 0) {
+            coldStartAllowanceSeconds = 30;
+        }
         if (readTimeoutSeconds <= 0) {
-            readTimeoutSeconds = 180;
+            readTimeoutSeconds = inferenceTimeoutSeconds + coldStartAllowanceSeconds;
         }
         if (statusReadTimeoutSeconds <= 0) {
             statusReadTimeoutSeconds = 30;
@@ -67,7 +77,7 @@ public record VtonProperties(
             coldStartRetryEnabled = Boolean.TRUE;
         }
         if (coldStartRetryDelayMs == null || coldStartRetryDelayMs <= 0) {
-            coldStartRetryDelayMs = 3000L;
+            coldStartRetryDelayMs = 2000L;
         }
         if (dailyLimit <= 0) {
             dailyLimit = 5;

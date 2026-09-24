@@ -21,7 +21,9 @@ import org.springframework.web.client.RestClientResponseException;
 
 /**
  * RunPod Serverless VTON istemcisi — POST /run, GET /status/{id}, Bearer API key.
- * Cold-start icin 1 retry + exponential backoff (varsayilan 3 sn).
+ * 5xx veya timeout: 1 retry, varsayilan 2 sn bekler. Ikinci hata
+ * VtonWorkerUnavailableException — VtonService kotayi iade eder.
+ * Okuma zamani asimi inference + cold-start payidir.
  */
 @Component
 @ConditionalOnProperty(
@@ -85,7 +87,7 @@ public class RunPodVtonWorkerClient implements VtonWorkerClient {
         this.statusPathTemplate = properties.statusPathTemplate();
         this.coldStartRetryEnabled = Boolean.TRUE.equals(properties.coldStartRetryEnabled());
         this.coldStartRetryDelayMs = properties.coldStartRetryDelayMs() == null
-                ? 3000L
+                ? 2000L
                 : properties.coldStartRetryDelayMs();
         this.sleeper = sleeper == null ? BackoffSleeper.THREAD : sleeper;
     }
@@ -196,7 +198,6 @@ public class RunPodVtonWorkerClient implements VtonWorkerClient {
             try {
                 return action.get();
             } catch (RuntimeException second) {
-                // Exponential: ikinci bekleme = 2x (belge ornegi); yine basarisizsa hata
                 throw wrapUnavailable(operation, second);
             }
         }

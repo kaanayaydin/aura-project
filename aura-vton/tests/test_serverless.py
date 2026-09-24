@@ -60,6 +60,25 @@ def test_runpod_handler_unwraps_input():
     assert out["jobId"] == "srv-2"
 
 
+def test_handle_job_rejects_url_outside_storage_allowlist():
+    from serverless_handler import handle_job
+
+    tiny = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+    out = handle_job(
+        {
+            "jobId": "srv-ssrf",
+            "personImageBase64": tiny,
+            "garmentImageBase64": tiny,
+            "personImageUrl": "http://169.254.169.254/latest/meta-data/",
+        }
+    )
+    assert out["ok"] is False
+    assert out["status"] == "FAILED"
+    assert "[SSRF]" in out["errorMessage"]
+
+
 def test_prewarm_skips_when_disabled(monkeypatch):
     monkeypatch.setenv("AURA_VTON_PREWARM", "false")
     from scripts.prewarm_cache import main
