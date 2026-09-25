@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,10 +72,16 @@ class Settings(BaseSettings):
     prewarm: bool = False
     prewarm_catvton: bool = False
 
-    # Object storage (MinIO / R2) — sonuc upload
+    # Object storage (MinIO / R2). Java ile ayni AURA_S3_* ; worker override AURA_VTON_S3_*.
     s3_enabled: bool = False
-    s3_endpoint: str = "http://127.0.0.1:9000"
-    s3_public_base_url: str = "http://127.0.0.1:9000"
+    s3_endpoint: str = Field(
+        default="http://127.0.0.1:9000",
+        validation_alias=AliasChoices("AURA_S3_ENDPOINT", "AURA_VTON_S3_ENDPOINT"),
+    )
+    s3_public_base_url: str = Field(
+        default="http://127.0.0.1:9000",
+        validation_alias=AliasChoices("AURA_S3_PUBLIC_BASE_URL", "AURA_VTON_S3_PUBLIC_BASE_URL"),
+    )
     s3_region: str = "us-east-1"
     s3_access_key: str = "aura_minio"
     s3_secret_key: str = "aura_minio_secret"
@@ -82,6 +89,18 @@ class Settings(BaseSettings):
     s3_vton_bucket: str = "aura-vton"
     s3_wardrobe_bucket: str = "aura-wardrobe"
     s3_avatars_bucket: str = "aura-avatars"
+    wardrobe_public_host: str = Field(
+        default="",
+        validation_alias=AliasChoices("AURA_S3_WARDROBE_PUBLIC_HOST", "AURA_VTON_WARDROBE_PUBLIC_HOST"),
+    )
+    vton_public_host: str = Field(
+        default="",
+        validation_alias=AliasChoices("AURA_S3_VTON_PUBLIC_HOST", "AURA_VTON_VTON_PUBLIC_HOST"),
+    )
+    avatars_public_host: str = Field(
+        default="",
+        validation_alias=AliasChoices("AURA_S3_AVATARS_PUBLIC_HOST", "AURA_VTON_AVATARS_PUBLIC_HOST"),
+    )
     # Java StorageUrlGuard.MAX_DOWNLOAD_BYTES ile senkron.
     max_download_bytes: int = 20 * 1024 * 1024
     # Java StorageUrlGuard.PIN_TTL ile senkron (CDN A kaydi / TOCTOU dengesi).

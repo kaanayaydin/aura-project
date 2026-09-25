@@ -36,6 +36,9 @@ public class MemoryObjectStorage implements ObjectStorage {
 
     @Override
     public String generatePublicUrl(String bucket, String key) {
+        if (properties.publicHostFor(bucket) != null) {
+            return properties.publicObjectUrl(bucket, key);
+        }
         String base = properties.publicBaseUrl().replaceAll("/$", "");
         return base + "/memory/" + bucket + "/" + key;
     }

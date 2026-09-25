@@ -6,9 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import app.aura.backend.config.StorageProperties;
 import app.aura.backend.web.UnsafeObjectUrlException;
 import java.net.InetAddress;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +68,48 @@ class StorageUrlGuardTest {
     @Test
     void unknownBucketIsRejected() {
         assertBlocked("http://127.0.0.1:9000/not-a-bucket/person/x.jpg");
+    }
+
+    @Test
+    void configuredEndpointHostIsPinnedWithRealDns() throws Exception {
+        String endpoint = System.getenv("AURA_S3_ENDPOINT");
+        Assumptions.assumeTrue(endpoint != null && endpoint.contains("r2.cloudflarestorage.com"));
+        URI origin = URI.create(endpoint.trim());
+        String host = origin.getHost();
+        InetAddress[] live = InetAddress.getAllByName(host);
+        assertThat(live).isNotEmpty();
+        assertThat(Arrays.stream(live).noneMatch(InetAddress::isLoopbackAddress)).isTrue();
+
+        StorageUrlGuard r2 = new StorageUrlGuard(storage(endpoint, endpoint));
+        String url = endpoint.replaceAll("/$", "") + "/aura-wardrobe/items/dns-probe.png";
+        StorageUrlGuard.PinnedTarget pinned = r2.pin(url);
+        assertThat(pinned.connectIps()).containsExactlyInAnyOrder(live);
+    }
+
+    @Test
+    void r2PublicHostUrlDropsBucketFromPathAndIsAllowlisted() throws Exception {
+        StorageProperties r2 = new StorageProperties(
+                "s3",
+                "https://example.r2.cloudflarestorage.com",
+                "https://example.r2.cloudflarestorage.com",
+                "auto",
+                "test",
+                "test",
+                true,
+                900,
+                "aura-wardrobe",
+                "aura-vton",
+                "aura-avatars",
+                "https://pub-wardrobe.example.r2.dev",
+                "https://pub-vton.example.r2.dev",
+                "https://pub-avatars.example.r2.dev");
+        assertThat(r2.publicObjectUrl("aura-wardrobe", "items/abc.png"))
+                .isEqualTo("https://pub-wardrobe.example.r2.dev/items/abc.png");
+        InetAddress pinned = InetAddress.getByAddress(new byte[] {127, 0, 0, 2});
+        StorageUrlGuard r2Guard = new StorageUrlGuard(r2, host -> new InetAddress[] {pinned});
+        r2Guard.rejectUnsafeObjectUrl("https://pub-wardrobe.example.r2.dev/items/abc.png");
+        assertThatThrownBy(() -> r2Guard.rejectUnsafeObjectUrl("https://pub-other.example.r2.dev/items/abc.png"))
+                .isInstanceOf(UnsafeObjectUrlException.class);
     }
 
     @Test
@@ -167,7 +212,28 @@ class StorageUrlGuardTest {
                 900,
                 "aura-wardrobe",
                 "aura-vton",
-                "aura-avatars");
+                "aura-avatars",
+                null,
+                null,
+                null);
+    }
+
+    private static StorageProperties storage(String endpoint, String publicBase) {
+        return new StorageProperties(
+                "s3",
+                endpoint,
+                publicBase,
+                "auto",
+                "test",
+                "test",
+                true,
+                900,
+                "aura-wardrobe",
+                "aura-vton",
+                "aura-avatars",
+                null,
+                null,
+                null);
     }
 
     private static StorageProperties localMinio() {
@@ -182,6 +248,9 @@ class StorageUrlGuardTest {
                 900,
                 "aura-wardrobe",
                 "aura-vton",
-                "aura-avatars");
+                "aura-avatars",
+                null,
+                null,
+                null);
     }
 }

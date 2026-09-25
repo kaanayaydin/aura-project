@@ -68,6 +68,7 @@ public class StorageUrlGuard {
     private final Duration pinTtl;
     private final Duration observeWindow;
     private final int observeSamples;
+    private final Set<String> publicReadHosts;
     private final Origin workerOrigin;
 
     private final Object pinLock = new Object();
@@ -118,8 +119,23 @@ public class StorageUrlGuard {
         this.observeSamples = observeSamples <= 0 ? OBSERVE_SAMPLES : observeSamples;
         this.allowedOrigins = new LinkedHashSet<>();
         this.originHosts = new ArrayList<>();
+        // S3 API (AURA_S3_ENDPOINT) ve okuma tabani (AURA_S3_PUBLIC_BASE_URL).
+        // R2 host'u burada sabit degil; provider degisince ikisi de yeniden pinlenir.
         addOrigin(properties.endpoint());
         addOrigin(properties.publicBaseUrl());
+        addOrigin(properties.wardrobePublicHost());
+        addOrigin(properties.vtonPublicHost());
+        addOrigin(properties.avatarsPublicHost());
+        java.util.LinkedHashSet<String> hosts = new java.util.LinkedHashSet<>();
+        for (String candidate : new String[] {
+                hostName(properties.wardrobePublicHost()),
+                hostName(properties.vtonPublicHost()),
+                hostName(properties.avatarsPublicHost())}) {
+            if (!candidate.isBlank()) {
+                hosts.add(candidate);
+            }
+        }
+        this.publicReadHosts = Set.copyOf(hosts);
         this.workerOrigin = parseOrigin(workerBaseUrl);
         if (this.workerOrigin != null) {
             originHosts.add(this.workerOrigin.host());
@@ -193,7 +209,7 @@ public class StorageUrlGuard {
             throw blocked("Gorsel URL izin verilen depolama hostu degil");
         }
         List<InetAddress> verified = verifyResolvedIps(host);
-        rejectUnsafePath(uri.getRawPath(), workerResult);
+        rejectUnsafePath(host, uri.getRawPath(), workerResult);
         String path = uri.getRawPath() == null || uri.getRawPath().isBlank() ? "/" : uri.getRawPath();
         return new PinnedTarget(scheme, host, port, path, uri.getRawQuery(), verified);
     }
@@ -313,7 +329,7 @@ public class StorageUrlGuard {
         }
     }
 
-    private void rejectUnsafePath(String rawPath, boolean workerResult) {
+    private void rejectUnsafePath(String host, String rawPath, boolean workerResult) {
         if (rawPath == null || rawPath.isBlank() || "/".equals(rawPath)) {
             throw blocked("Gorsel URL yolu gecersiz");
         }
@@ -332,6 +348,9 @@ public class StorageUrlGuard {
                 return;
             }
             throw blocked("Gorsel URL worker /outputs/ degil");
+        }
+        if (publicReadHosts.contains(host.toLowerCase(Locale.ROOT)) && matchesPublicKeyPath(path)) {
+            return;
         }
         if (matchesMemoryPath(path) || matchesBucketPath(path)) {
             return;
@@ -362,6 +381,24 @@ public class StorageUrlGuard {
             return false;
         }
         return !key.isBlank() && !key.contains("..");
+    }
+
+    private boolean matchesPublicKeyPath(String path) {
+        String trimmed = path.startsWith("/") ? path.substring(1) : path;
+        return !trimmed.isBlank() && !trimmed.contains("..");
+    }
+
+    private static String hostName(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        try {
+            URI uri = URI.create(raw.trim());
+            String host = uri.getHost();
+            return host == null ? "" : host.toLowerCase(Locale.ROOT);
+        } catch (IllegalArgumentException exception) {
+            return "";
+        }
     }
 
     private void addOrigin(String raw) {

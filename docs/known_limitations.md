@@ -80,7 +80,9 @@ Header parse edilemeyen format (≥24 bayt, ImageIO + WebP/BMP magic yok) fail-c
 
 ## VTON / Wardrobe object URL SSRF
 
-`personImageUrl` ve wardrobe `imageUrl` yalnızca `aura.storage.endpoint` / `public-base-url` origin’ine ve `wardrobe|vton|avatars` bucket yol şablonuna izin verir. DNS pin **host bazlıdır** (worker loopback, storage CDN ile birleşmez).
+`personImageUrl` ve wardrobe `imageUrl` yalnızca yapılandırılmış storage origin’lerine izin verir: S3 API endpoint, path-style `public-base-url`, ve (doluysa) üç R2 public host (`AURA_S3_WARDROBE_PUBLIC_HOST`, `AURA_S3_VTON_PUBLIC_HOST`, `AURA_S3_AVATARS_PUBLIC_HOST`). Public host’ta yol bucket adı içermez (`/items/<uuid>.png`). DNS pin host bazlıdır.
+
+R2 public development URL (`https://pub-….r2.dev`) açıkken dolap görseli imzasız GET ile okunur. Anahtar UUID’lidir; adres “linki bilen görür” düzeyindedir, giriş zorunlu değildir. Bucket listelenemez. Bu, Cloudflare’in development `r2.dev` ucudur (rate limit, WAF yok). Üretimde custom domain tercih edilir. VTON sonuç görseli bu public host’u kullanmaz; Java `/api/v1/aura/vton/results/{id}/image` proxy’si sahiplik kontrolü yapar.
 
 TCP doğrulanmış IP’ye açılır; Host header ve TLS SNI orijinal hostname kalır. Java TLS: `SSLParameters.setEndpointIdentificationAlgorithm("HTTPS")` (RFC 2818) — `evil.example.com` sertifikası `files.aura.test` için sessiz kabul edilmez (`PinnedHttpDownloaderTlsTest`, gerçek keytool PKCS12 + trust store). Python `ssl.create_default_context()` + `check_hostname`.
 

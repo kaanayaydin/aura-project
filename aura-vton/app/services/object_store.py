@@ -46,7 +46,10 @@ def upload_result_png(job_id: str, image: Image.Image) -> UploadedObject | None:
         config=Config(s3={"addressing_style": "path" if settings.s3_path_style else "virtual"}),
     )
     client.put_object(Bucket=bucket, Key=key, Body=buffer.getvalue(), ContentType="image/png")
-    base = settings.s3_public_base_url.rstrip("/")
-    object_url = f"{base}/{bucket}/{key}" if settings.s3_path_style else f"{base}/{key}"
+    base = (settings.vton_public_host or settings.s3_public_base_url).rstrip("/")
+    if settings.vton_public_host:
+        object_url = f"{base}/{key}"
+    else:
+        object_url = f"{base}/{bucket}/{key}" if settings.s3_path_style else f"{base}/{key}"
     logger.info("VTON sonuc S3'e yazildi: %s", object_url)
     return UploadedObject(object_url=object_url, bucket=bucket, key=key)

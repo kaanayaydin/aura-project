@@ -166,7 +166,10 @@ class PinnedHttpDownloaderTest {
                 900,
                 "aura-wardrobe",
                 "aura-vton",
-                "aura-avatars");
+                "aura-avatars",
+                null,
+                null,
+                null);
     }
 
     private static StorageProperties localMinio(int port) {

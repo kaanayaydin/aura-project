@@ -70,7 +70,13 @@ def allowed_origins() -> set[tuple[str, str, int]]:
     global _ALLOWED_ORIGINS
     if _ALLOWED_ORIGINS is None:
         origins: set[tuple[str, str, int]] = set()
-        for raw in (settings.s3_endpoint, settings.s3_public_base_url):
+        for raw in (
+            settings.s3_endpoint,
+            settings.s3_public_base_url,
+            settings.wardrobe_public_host,
+            settings.vton_public_host,
+            settings.avatars_public_host,
+        ):
             origin = _parse_origin(raw)
             if origin:
                 origins.add(origin)
@@ -213,7 +219,11 @@ def pin_object_url(url: str) -> PinnedTarget:
     path = unquote(parsed.path or "")
     if ".." in path or ".." in (parsed.path or ""):
         raise VtonInferenceError("Gorsel URL yolu gecersiz", code="SSRF")
-    if not _path_matches_bucket(path):
+    if host.lower().rstrip(".") in _public_read_hosts():
+        key = path[1:] if path.startswith("/") else path
+        if not key:
+            raise VtonInferenceError("Gorsel URL yolu gecersiz", code="SSRF")
+    elif not _path_matches_bucket(path):
         raise VtonInferenceError("Gorsel URL bucket/yol sablonu uyusmuyor", code="SSRF")
     return PinnedTarget(
         scheme=scheme,
@@ -257,6 +267,19 @@ def _observe_and_maybe_promote(
     _PINNED_BY_HOST[key] = set(ips)
     _CANDIDATES.pop(key, None)
     return True
+
+
+def _public_read_hosts() -> set[str]:
+    hosts: set[str] = set()
+    for raw in (
+        settings.wardrobe_public_host,
+        settings.vton_public_host,
+        settings.avatars_public_host,
+    ):
+        origin = _parse_origin(raw)
+        if origin:
+            hosts.add(origin[1])
+    return hosts
 
 
 def _path_matches_bucket(path: str) -> bool:

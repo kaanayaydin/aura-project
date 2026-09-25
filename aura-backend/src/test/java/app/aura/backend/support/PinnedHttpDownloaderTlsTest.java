@@ -81,6 +81,9 @@ class PinnedHttpDownloaderTlsTest {
                 900,
                 "aura-wardrobe",
                 "aura-vton",
-                "aura-avatars");
+                "aura-avatars",
+                null,
+                null,
+                null);
     }
 }

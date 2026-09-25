@@ -43,12 +43,7 @@ public class S3ObjectStorage implements ObjectStorage {
 
     @Override
     public String generatePublicUrl(String bucket, String key) {
-        String base = properties.publicBaseUrl().replaceAll("/$", "");
-        if (properties.pathStyle()) {
-            return base + "/" + bucket + "/" + key;
-        }
-        // virtual-hosted style (R2/CDN)
-        return base + "/" + key;
+        return properties.publicObjectUrl(bucket, key);
     }
 
     @Override

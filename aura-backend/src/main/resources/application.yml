@@ -109,6 +109,11 @@ aura:
     wardrobe-bucket: ${AURA_S3_WARDROBE_BUCKET:aura-wardrobe}
     vton-bucket: ${AURA_S3_VTON_BUCKET:aura-vton}
     avatars-bucket: ${AURA_S3_AVATARS_BUCKET:aura-avatars}
+    # R2 Public Development URL origin. Bos ise path-style publicBaseUrl.
+    # Ornek: https://pub-xxxx.r2.dev  (dashboard, bucket basina ayri)
+    wardrobe-public-host: ${AURA_S3_WARDROBE_PUBLIC_HOST:}
+    vton-public-host: ${AURA_S3_VTON_PUBLIC_HOST:}
+    avatars-public-host: ${AURA_S3_AVATARS_PUBLIC_HOST:}
 
 logging:
   level:

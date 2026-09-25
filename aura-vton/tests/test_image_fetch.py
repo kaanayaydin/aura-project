@@ -236,6 +236,31 @@ def test_observe_window_promotes_consistent_ip_after_delay(monkeypatch):
     assert_object_url_allowed(url)
 
 
+def test_r2_endpoint_pins_real_dns(monkeypatch):
+    import os
+    import socket
+
+    from app.services import url_allowlist
+
+    endpoint = os.environ.get("AURA_S3_ENDPOINT", "")
+    if "r2.cloudflarestorage.com" not in endpoint:
+        pytest.skip("AURA_S3_ENDPOINT R2 degil")
+    host = endpoint.split("://", 1)[1].split("/", 1)[0].split(":")[0]
+    live = {
+        __import__("ipaddress").ip_address(ip[4][0])
+        for ip in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    }
+    assert live
+    assert __import__("ipaddress").ip_address("127.0.0.1") not in live
+    monkeypatch.setattr(settings, "s3_endpoint", endpoint)
+    monkeypatch.setattr(settings, "s3_public_base_url", endpoint)
+    url_allowlist.reset_allowlist_cache()
+    url = endpoint.rstrip("/") + "/aura-wardrobe/items/dns-probe.png"
+    url_allowlist.assert_object_url_allowed(url)
+    pinned = set(url_allowlist.pinned_ips_for(host))
+    assert pinned == live
+
+
 def test_observe_samples_constant_is_two():
     """OBSERVE_SAMPLES 1'e duserse kirilir (Java StorageUrlGuard.OBSERVE_SAMPLES ile ayni kilit)."""
     from app.services import url_allowlist

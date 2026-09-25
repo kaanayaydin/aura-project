@@ -27,7 +27,10 @@ class StorageServiceTest {
                 600,
                 "aura-wardrobe",
                 "aura-vton",
-                "aura-avatars");
+                "aura-avatars",
+                null,
+                null,
+                null);
         memory = new MemoryObjectStorage(properties);
         storageService = new StorageService(memory, properties);
     }
