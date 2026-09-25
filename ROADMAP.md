@@ -57,10 +57,16 @@ Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile
 
 ## Faz 2 — Object Storage + Veri Sağlamlaştırma (1-2 hafta, Faz 1 ile kısmen paralel)
 
-- [ ] Görselleri (dolap, VTON sonuçları) Base64/DB'den S3/R2'ye taşı
-- [ ] Presigned URL akışı (zaten VTON mimarisinde tasarlanmıştı, şimdi gerçek storage'a bağlayın)
-- [ ] Eski Base64 kayıtlar için arka planda migration script'i
-- [ ] CDN (CloudFront/Cloudflare) — özellikle VTON sonuçları için
+## Faz 2 — Object Storage + Veri Sağlamlaştırma ✅ TAMAMLANDI (2026-09-24)
+- [x] Görselleri Base64/DB'den S3/R2'ye taşı
+- [x] Presigned URL akışı (R2 S3-uyumlu API, region=auto)
+- [x] StorageUrlGuard/allowlist R2 origin'lerini (endpoint + 3 public host) tanıyor
+- [x] Public erişim: bucket başına ayrı .r2.dev host (custom domain gerektirmeden)
+      (NOT: Türkiye'den yerel test sırasında bazı ISS'lerde Cloudflare'in
+      paylaşımlı IP bloğu erişilemez olabilir - VPN ile 200 doğrulandı,
+      gerçek bulut backend'i bu sorunu yaşamayacak)
+- [ ] Eski Base64 kayıtlar için migration script (henüz eski veri yok, gerek yok)
+- [ ] CDN (opsiyonel, R2 zaten hızlı, ihtiyaç olursa eklenir)
 
 **Çıkış kriteri:** Veritabanınız artık dev binary blob'larla şişmiyor, görseller hızlı ve ölçeklenebilir servis ediliyor.
 
