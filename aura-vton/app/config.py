@@ -82,7 +82,10 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:9000",
         validation_alias=AliasChoices("AURA_S3_PUBLIC_BASE_URL", "AURA_VTON_S3_PUBLIC_BASE_URL"),
     )
-    s3_region: str = "us-east-1"
+    s3_region: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("AURA_S3_REGION", "AURA_VTON_S3_REGION"),
+    )
     s3_access_key: str = "aura_minio"
     s3_secret_key: str = "aura_minio_secret"
     s3_path_style: bool = True
