@@ -1,14 +1,22 @@
 # Gercek CatVTON inference (AURA_VTON_MOCK_MODEL=false)
 # Apple Silicon: pip install torch (MPS) + asagidakiler
+# GPU imaj (Dockerfile) torch satirini atlar; taban imaj torch==2.2.2 kalir.
+# torch.xpu PyTorch 2.4'te geldi. 2.2.2'de attribute yok.
 torch>=2.1.0
-diffusers>=0.30.0
-transformers>=4.40.0
+# diffusers>=0.36 import aninda torch.xpu.empty_cache okur
+# (diffusers/utils/torch_utils.py). 0.35.2 son guvenli surum:
+# xpu yalnizca hasattr(torch, "xpu") arkasinda.
+diffusers==0.35.2
+# transformers 5.x, torch<2.5 gorunce PyTorch modellerini kapatir.
+transformers>=4.40.0,<5
+# transformers 4.57 huggingface_hub<1 ister; serbest >=0.24 hub 1.x ceker.
+huggingface_hub>=0.34.0,<1
 accelerate>=0.33.0
-huggingface_hub>=0.24.0
 safetensors>=0.4.0
 tqdm>=4.66.0
 # SCHP AutoMasker (INT8 ONNX — CPU; CatVTON MPS/CUDA ile paylasmaz)
 onnxruntime>=1.18.0
-numpy>=1.26.0
+# torch 2.2.2 NumPy 1.x ile derlendi; NumPy 2 ABI'si kirilir.
+numpy>=1.26.0,<2
 # Pose guiding (opsiyonel ONNX; SCHP-pseudo fallback bagimlilik gerektirmez)
 # HF hub zaten CatVTON icin yuklu
