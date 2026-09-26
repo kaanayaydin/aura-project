@@ -1,139 +1,141 @@
-# AURA — MVP'den Lansmana Detaylı Yol Haritası
+# AURA — Geliştirme Yol Haritası
 
-**Baz alınan durum:** v0.21.x civarı — Vision pipeline (YOLO+SAM+CLIP), orientation/RotNet ensemble, VTON (CatVTON+SCHP), JWT auth, Flutter onay UI zinciri tamamlanmak üzere.
-**Yaklaşım:** Her faz bir önceki fazın üzerine kurulur; hiçbir faz "bitmeden" bir sonrakine geçilmez ama fazlar arasında paralel çalışılabilecek işler ayrıca işaretli.
-
----
-
-## Faz 0 — Şu An Bitirilmekte Olan (1-2 hafta)
-
-Bu, üzerinde çalıştığımız zincir — bitmeden hiçbir şeye başlamayın, çünkü VTON'un ve dolabın temel doğruluğu buna bağlı.
-
-- [x] Orientation onay UI + backend koruması (re-normalize, skip_orientation, rembg tutarlılığı) — **neredeyse tamam**
-- [x] Kalan küçük temizlikler (test izolasyonu, docstring düzeltmesi)
-- [ ] Kategori tespiti (YOLO-boş fallback) golden-set regresyonu genişletme
-
-**Çıkış kriteri:** Dolaba yüklenen her fotoğraf (düz, eğik, perspektifli) tutarlı, doğru yönlü, 3:4 formatında saklanıyor; kullanıcı kararı hiçbir koşulda sessizce ezilmiyor.
+**Son güncelleme:** 2026-09-26 — Öncelik değişikliği: altyapı (auth, cloud GPU, storage, güvenlik) tamamlandı; sıradaki odak **ürünün kendisi** — VTON çıktı kalitesi, arayüz tasarımı, AI stylist deneyimi. Kalan altyapı işleri (plan bazlı kota, maliyet izleme, migration script) bilinçli olarak ertelendi, ürün kalitesi turundan sonra ele alınacak.
 
 ---
 
-## Faz 1 — Gerçek Auth + Cloud GPU Bağlama (2-3 hafta)
+## ✅ Tamamlanan Altyapı (Faz 0–2)
 
-Bunu daha önce konuşmuştuk: cloud GPU'yu şifresiz/rate-limitsiz bir auth ile açmak maliyet riski. Sıra önemli.
+Bu bölüm sıkıştırılmış bir özet — detaylı denetim geçmişi commit mesajlarında ve geçmiş konuşmalarda duruyor.
 
-### 1a. Production-grade Auth (~1 hafta) ✅ TAMAMLANDI (2026-09-24)
-- [x] BCrypt parola, register/login/refresh token rotasyonu
-      (refresh rotasyonu + replay tespiti gerçek Postgres/HTTP ile
-      doğrulandı, REQUIRES_NEW ile transaction sınırı düzeltildi)
-- [x] Rate limiting (Bucket4j + Redis, IP bazlı, 5/dakika üretim ayarı)
-- [x] Brute-force koruması, hesap kilitleme (5 deneme → 15dk LOCKED,
-      otomatik açılma doğrulandı)
-- [x] JWT secret zorunluluğu (sessiz zayıf varsayılan kaldırıldı,
-      env set edilmezse uygulama başlamıyor)
-- [x] Enumeration-önleme (bilinmeyen email/yanlış şifre aynı mesaj)
+### Faz 0 — Vision Pipeline Temeli
+- [x] Orientation onay UI + backend koruması (RotNet ensemble, re-normalize, skip_orientation)
+- [x] Kategori tespiti (YOLO-boş fallback), boş-sahne yanlış-pozitif düzeltmesi
+- [x] Decompression bomb koruması (Java + Vision, header-only inceleme)
 
-### 1b. Cloud GPU Endpoint (~1 hafta) ✅ RunPod deploy + timeout/retry tamamlandı (2026-09-24)
-- [x] RunPod Serverless veya Modal'a VTON worker deploy
-      (mock modda uçtan uca test edildi: register→login→VTON isteği→
-      COMPLETED→DB — DB kaydı bağımsız denetimle doğrulandı [vton_jobs
-      id=16, user 3]. RunPod endpoint'inin gerçekten kullanıldığı ve
-      54.8s sürenin ölçümü RunPod dashboard/backend log gözlemine
-      dayanıyor, bağımsız üçüncü taraf kanıtı yok.)
-- [x] Java tarafında timeout + retry + cold-start toleransı
-      (120sn limit, gerçek cold-start senaryosunda sorunsuz)
-- [x] Kullanıcı bazlı VTON kota sayacı (günlük sabit limit, AURA_VTON_DAILY_LIMIT
-      varsayılan 5; HTTP 429, gerçek testlerle doğrulandı — VtonQuotaServiceTest,
-      VtonQuotaControllerTest, mutasyon testiyle kilit teyit edildi)
-- [ ] **Plan bazlı** kota farklılaştırması (Aura Silver/Black ayrımı) — henüz
-      yok, User modelinde plan/tier alanı hiç tanımlı değil. Bu, Faz 6
-      (Ticarileşme) ile birlikte, billing entegrasyonuyla yapılacak.
-- [ ] Maliyet izleme (RunPod dashboard + basit bir günlük harcama alarmı)
+### Faz 1a — Production Auth
+- [x] BCrypt, register/login/refresh token rotasyonu + replay tespiti (REQUIRES_NEW ile)
+- [x] Rate limiting (Bucket4j + Redis, 5/dakika), brute-force kilidi (5 deneme → 15dk)
+- [x] JWT secret zorunluluğu, enumeration-önleme
 
-**Çıkış kriteri:** Gerçek bir kullanıcı hesabıyla giriş yapıp, gerçek bulut GPU'da bir VTON isteği çalıştırabiliyorsunuz; kötü niyetli/sınırsız istek maliyeti şişiremiyor.
+### Faz 1b — Cloud GPU (RunPod Serverless)
+- [x] RunPod deploy, gerçek uçtan uca test (register→login→VTON→COMPLETED→DB)
+- [x] Timeout/retry/cold-start toleransı, kullanıcı bazlı günlük kota (HTTP 429)
+- [x] **5 turluk SSRF denetim zinciri** — Wardrobe SSRF, DNS TOCTOU, TLS host doğrulama, kalıcı DNS ele geçirme, resolveResultBytes — hepsi Java+Python'da kapatıldı
 
-> 💰 **Maliyet notu (RunPod Serverless, Ağustos 2026 fiyatlarıyla):** Bir A5000 (24GB) worker saniyede ~$0.00026 (Flex) — bir VTON isteği ~15-30 sn sürerse **istek başına ~$0.004-0.008**. 1.000 ücretsiz-tier VTON denemesi/ay ≈ **$4-8**. Cold-start (worker uykudayken ilk istek) 5-15 sn ek gecikme getirir ama fazladan ücret değildir; sürekli "warm" tutmak isterseniz (Active worker, %40 indirimli) günde birkaç saat açık tutmak bile aylık $15-40 arası ek maliyet demektir — beta aşamasında buna gerek yok, scale-to-zero'da kalın.
+### Faz 2 — Object Storage (Cloudflare R2)
+- [x] Base64/DB'den R2'ye taşıma, presigned upload, region=auto (SigV4)
+- [x] StorageUrlGuard R2 origin'lerini (endpoint + 3 public host) tanıyor
+- [x] Public erişim: bucket başına `.r2.dev` host (custom domain gerektirmeden)
+- [x] Gerçek CatVTON modeline geçiş: `torch.xpu` bağımlılık çakışması bulunup düzeltildi (diffusers/transformers/numpy pin'lendi)
+
+**Ertelenen altyapı maddeleri (Faz 3.5'te ele alınacak, aşağıya bakın):** plan bazlı kota, maliyet izleme, eski veri migration script'i, egress proxy.
 
 ---
 
-## Faz 2 — Object Storage + Veri Sağlamlaştırma (1-2 hafta, Faz 1 ile kısmen paralel)
+## 🎯 ŞİMDİKİ ODAK — Faz 3: Ürün Kalitesi ve Deneyimi
 
-## Faz 2 — Object Storage + Veri Sağlamlaştırma ✅ TAMAMLANDI (2026-09-24)
-- [x] Görselleri Base64/DB'den S3/R2'ye taşı
-- [x] Presigned URL akışı (R2 S3-uyumlu API, region=auto)
-- [x] StorageUrlGuard/allowlist R2 origin'lerini (endpoint + 3 public host) tanıyor
-- [x] Public erişim: bucket başına ayrı .r2.dev host (custom domain gerektirmeden)
-      (NOT: Türkiye'den yerel test sırasında bazı ISS'lerde Cloudflare'in
-      paylaşımlı IP bloğu erişilemez olabilir - VPN ile 200 doğrulandı,
-      gerçek bulut backend'i bu sorunu yaşamayacak)
-- [ ] Eski Base64 kayıtlar için migration script (henüz eski veri yok, gerek yok)
-- [ ] CDN (opsiyonel, R2 zaten hızlı, ihtiyaç olursa eklenir)
+Buraya kadarki her şey kullanıcının **görmediği** işti. Şimdi kullanıcının **hissedeceği** şeye geçiyoruz. Üç paralel cephe var — sırayla değil, birlikte ilerleyebilir.
 
-**Çıkış kriteri:** Veritabanınız artık dev binary blob'larla şişmiyor, görseller hızlı ve ölçeklenebilir servis ediliyor.
+### 3a. VTON Çıktı Kalitesi — Post-Processing Katmanı
 
-> 💰 **Maliyet notu (Cloudflare R2, 2026 fiyatlarıyla):** Depolama $0.015/GB-ay, **egress (dışa veri çıkışı) ücretsiz** (S3'ün aksine — bu, sık görüntülenen VTON/dolap fotoğrafları için önemli bir fark, aylık faturanızı öngörülebilir tutar). 1.000 kullanıcı × ortalama 30 dolap fotoğrafı + birkaç VTON sonucu (~500KB/görsel) ≈ 20-30GB → **aylık ~$0.30-0.50 depolama, $0 egress**. CDN (Cloudflare, R2 ile aynı ekosistem) ek maliyetsiz eklenebilir. Bu faz, beklenenin aksine bütçenin en ucuz kalemlerinden biri.
+Şu an CatVTON'un ham çıktısı doğrudan kullanıcıya gidiyor. Hedef: ham model çıktısı ile "mağaza kalitesi görsel" arasındaki farkı kapatan bir işleme katmanı eklemek.
 
----
+- [ ] **Perspektif düzeltme** — kıyafetin dolaba eklenirken düz, cepheden bakışa normalize edilmesi (homografi/warp)
+- [ ] **Crop/kenar temizliği** — arka plan kalıntılarının, kesim hatalarının giderilmesi
+- [ ] **Işık/gölge normalizasyonu** — orijinal fotoğraftaki gölge/parlama, VTON çıktısına "yapıştırılmış" gibi durmasın diye düzeltilmesi
+- [ ] **"Ütülenmiş" doku temizliği** — kumaş kırışıklıklarının/gürültünün hafif yumuşatılması (aşırıya kaçmadan, gerçekçiliği bozmadan)
+- [ ] **Çözünürlük yükseltme** — çıktıya bir upscaling adımı (Real-ESRGAN gibi hafif bir model) eklenmesi
+- [ ] Golden-set'i gerçek çeşitlilikte büyütme (farklı kıyafet türü, ten tonu, vücut tipi — şu anki set çoğunlukla tek tip)
+- [ ] IDM-VTON ticari lisans durumunun netleştirilmesi (CatVTON'a bağlı kalınacaksa resmi karar olarak kayıt altına alınsın)
 
-## Faz 3 — VTON Kalite ve Ölçek Sertleştirmesi (2-3 hafta)
+**Çıkış kriteri:** VTON çıktısı, "bariz AI üretimi" değil, "gerçek bir ürün fotoğrafı" gibi hissettiriyor.
 
-- [ ] Gerçek kullanıcı trafiğiyle (beta test grubu) VTON kalitesini gözlemleyin — kumaş drapajı, ışık uyumu
-- [ ] Golden-set'i gerçek çeşitlilikte büyütün (farklı kıyafet türleri, farklı ten tonları, farklı vücut tipleri) — şu ana kadarki set çoğunlukla beyaz tişört, bu VTON'un genel güvenilirliğini test etmiyor
-- [ ] IDM-VTON'un ticari lisans durumunu netleştirin (hukuki, daha önce konuşmuştuk) — CatVTON'a bağlı kalacaksanız bunu resmi bir karar olarak kayıt altına alın
-- [ ] Prewarm/scale-to-zero maliyet dengesini gerçek trafik verisiyle ayarlayın
+### 3b. Arayüz Yeniden Tasarımı
 
-**Çıkış kriteri:** VTON, dar bir demo setinin ötesinde, çeşitli gerçek kullanıcı fotoğraflarında güvenilir sonuç veriyor; maliyetler öngörülebilir.
+Mevcut arayüz "şık değil, jenerik bir AI uygulaması gibi" — bu, Carbon & Champagne marka dilinin henüz gerçek bir görsel kimliğe dönüşmediğinin işareti.
 
-- [ ] (Ertelendi, kapalı beta sonrası değerlendirilecek) Egress proxy /
-      ağ seviyesi SSRF savunması — RunPod Serverless'ta native security
-      group/network policy yok, bunun için ayrı bir proxy servisi
-      gerekir. Kod-seviyesi savunma (StorageUrlGuard, PinnedHttpDownloader)
-      şu an tek hat; gerçek trafik hacmi görülünce önceliklendirilecek.
----
+- [ ] Mevcut ekranların (dolap, VTON sonucu, stylist chat) tasarım denetimi — neyin "jenerik" hissettirdiğini somutlaştırma
+- [ ] Tipografi, boşluk kullanımı, mikro-etkileşim (geçiş animasyonları, dokunma geri bildirimi) revizyonu
+- [ ] Carbon & Champagne paletinin (#0F1115, #D4AF37) tutarlı, iddialı biçimde uygulanması — şu an muhtemelen sadece renk paleti seviyesinde kalmış, kompozisyon/hiyerarşi seviyesine taşınmalı
+- [ ] Referans analizi: lüks moda/yaşam tarzı uygulamalarının (bilinçli olarak jenerik olmayan) tasarım dilinin incelenmesi
 
-## Faz 4 — "3D İncele" Özelliği (Hızlı Kazanım, Faz 3 ile paralel başlanabilir, 1-2 hafta)
+**Çıkış kriteri:** Uygulamayı ilk açan biri "bu bir lüks moda ürünü" hissediyor, "bir AI demo'su" değil.
 
-Az önce konuştuğumuz özellik — MVP'nin **farklılaştırıcı** parçası, yatırımcı/kullanıcı gösterimi için değerli.
+### 3c. AI Stylist Chat Geliştirmesi
 
-- [ ] Depth-Anything (veya MiDaS) ile dolap fotoğraflarından derinlik haritası üretimi (Vision servisine yeni bir adım)
-- [ ] Three.js/WebGL tabanlı, Carbon & Champagne temalı "inspect" kartı — parallax + ışık kayması efekti
-- [ ] Flutter'da bu kartı gösterecek bir WebView veya native entegrasyon
-- [ ] Sadece "Aura Black" kullanıcılarına özel bir özellik olarak konumlandırma (premium'u haklı çıkaran somut bir fark)
+Mevcut chat (Ollama tabanlı, llama3.2) — kalitesi/kişiliği hiç ayrıca değerlendirilmedi.
 
-**Çıkış kriteri:** Bir dolap parçasına dokunup parmakla/fareyle hafifçe döndürüldüğünde inandırıcı bir "3D'ye bakıyorum" hissi var.
+- [ ] Mevcut chat kalitesinin gerçek konuşmalarla test edilmesi — moda tavsiyesi verirken ne kadar isabetli/ilginç?
+- [ ] Sistem promptunun, Carbon & Champagne markasına uygun bir "stylist kişiliği" ile zenginleştirilmesi
+- [ ] Dolap/hava durumu verisiyle chat'in gerçekten bağlam kullandığının doğrulanması (şu an bağlantı var mı, ne kadar etkin kullanılıyor?)
 
-**Not:** Bu fazı isterseniz Faz 1-3 ile paralel, ayrı bir "araştırma dalı" olarak da ilerletebilirsiniz — VTON/backend sertleştirmesini bloklamaz.
+**Çıkış kriteri:** Kullanıcı stylist'e bir şey sorduğunda, jenerik bir chatbot değil, "kişisel stilistim" hissi alıyor.
 
 ---
 
-## Faz 5 — Kapalı Beta (2-3 hafta)
+## 💡 Claude'un Önerileri — Değerlendirmeye Açık Fikirler
 
-- [ ] 20-50 kişilik kapalı kullanıcı grubu (arkadaş çevresi, moda ilgili topluluklar)
+Bunlar benim önerim, henüz karara bağlanmadı — hangisi ilginizi çekerse oradan detaylandırırız. Aklıma geldikçe buraya eklemeye ve sohbette de ayrıca belirtmeye devam edeceğim.
+
+- **☆ Tam Kombin VTON** — Şu anki VTON tek parça (`clothType: upper`) gibi görünüyor. Üst+alt+ayakkabıyı **birlikte** render eden bir "tam kombin dene" modu, gerçek kullanım senaryosuna (insanlar tek tişört değil, tüm kombini görmek ister) çok daha yakın olur. Muhtemelen en yüksek kullanıcı-değeri/efor oranına sahip öneri.
+- **☆ Kapsül Gardolap Analizi** — Kullanıcının dolabını analiz edip "kışlık dış giyiminiz eksik" gibi somut boşluk tespitleri sunmak. Hem kullanıcı değeri yüksek hem de affiliate gelir modeliyle (Farfetch/SSENSE linkleri) doğrudan örtüşüyor — "eksiğinizi tamamlayın" önerisi doğal bir satın alma tetikleyicisi.
+- **☆ Beden/Uyum Tahmini** — Kullanıcının dolabındaki geçmiş verilerden, yeni bir markadaki bedenini tahmin etmek. Affiliate ortaklarının (iade oranını düşürdüğü için) özellikle değer vereceği bir özellik, ticarileşme fazında güçlü bir satış argümanı olur.
+- **☆ Ana Ekran Widget'ı** — Zaten var olan Thermodynamic Outfit Engine'i kullanarak, telefonun ana ekranında "bugün hava X, şunu giy" widget'ı. Düşük efor, yüksek görünürlük/günlük kullanım artırıcı.
+- **☆ Giysi Kullanım Takibi** — "Bu parçayı 6 aydır giymediniz" gibi nazik hatırlatmalar; sürdürülebilirlik/bilinçli tüketim anlatısına uygun, lüks-bilinçli kullanıcı kitlesiyle örtüşür, ileride bağış/yeniden satış önerisine kapı açar.
+- **☆ Çoklu Açı VTON** — Tek kareden değil, ön+yan iki açıdan render, kullanıcının "gerçekten böyle mi duruyor" güvenini artırır (daha uzun vadeli, model karmaşıklığı yüksek).
+
+---
+
+## Faz 3.5 — Ertelenen Altyapı İşleri (Faz 3 sonrası)
+
+- [ ] Plan bazlı kota farklılaştırması (Aura Silver/Black) — Faz 6 ile birlikte, billing entegrasyonuyla
+- [ ] Maliyet izleme (RunPod dashboard + günlük harcama alarmı)
+- [ ] Eski Base64 kayıtlar için migration script (henüz eski veri yok)
+- [ ] Egress proxy / ağ seviyesi SSRF savunması (kapalı beta sonrası değerlendirilecek)
+
+---
+
+## Faz 4 — "3D İncele" Özelliği (Faz 3 ile paralel başlanabilir)
+
+- [ ] Depth-Anything/MiDaS ile dolap fotoğraflarından derinlik haritası
+- [ ] Three.js/WebGL tabanlı, Carbon & Champagne temalı "inspect" kartı (parallax + ışık kayması)
+- [ ] Flutter entegrasyonu (WebView veya native)
+- [ ] Aura Black'e özel konumlandırma
+
+**Çıkış kriteri:** Bir dolap parçasına dokunup döndürüldüğünde inandırıcı bir "3D'ye bakıyorum" hissi var.
+
+---
+
+## Faz 5 — Kapalı Beta
+
+- [ ] 20-50 kişilik kapalı kullanıcı grubu
 - [ ] TestFlight (iOS) + Google Play kapalı test kanalı
-- [ ] Telemetri: onay UI ne sıklıkla tetikleniyor, hangi adımlarda kullanıcı takılıyor, VTON başarısızlık oranı
-- [ ] Bu veriyle: RotNet/geometri ensemble'ını gerçek kullanıcı verisiyle yeniden eğitme fırsatı (golden-set büyür)
+- [ ] Telemetri: onay UI tetiklenme sıklığı, VTON başarısızlık oranı, kullanıcı takılma noktaları
+- [ ] Bu veriyle RotNet/geometri ensemble'ının gerçek veriyle yeniden eğitilmesi
 
-**Çıkış kriteri:** Gerçek kullanıcılar uçtan uca (fotoğraf çek → dolaba ekle → öneri al → VTON dene → beğen) akışı sorunsuz tamamlayabiliyor; kritik bug'lar temizlenmiş.
-
----
-
-## Faz 6 — Ticarileşme Altyapısı (2 hafta, Faz 5 ile paralel başlanabilir)
-
-- [ ] Stripe (iOS için StoreKit, Android için Play Billing) entegrasyonu — "Aura Black" abonelik akışı
-- [ ] Affiliate/komisyon altyapısı (Farfetch/SSENSE/Beymen API'leri veya ortaklık linkleri) — bu bir sonraki faza da ertelenebilir, MVP'de olmak zorunda değil
-- [ ] Plan bazlı özellik kısıtlamaları (25 parça limiti, günlük öneri sayısı, VTON kotası) — kod tarafında zaten bazı yerlerde referans var, şimdi gerçek billing'e bağlayın
-
-**Çıkış kriteri:** Bir kullanıcı gerçek parayla "Aura Black"e geçebiliyor, kısıtlamalar doğru uygulanıyor.
-
-> 💰 **Maliyet notu (mağaza komisyonları, 2026 fiyatlarıyla):** $14.99/ay'lık abonelikte Apple/Google'ın Küçük İşletme Programı'na (yıllık $1M altı gelir) kayıtlıysanız komisyon **%15** — yani her abonelikten **~$2.25 mağazaya gider**, size ~$12.74 kalır (Apple'da 2. yıldan itibaren zaten %15'e düşer, Google'da baştan %15). Program'a kayıt olmayı unutmayın, aksi halde ilk yıl Apple'da %30 kesinti (~$4.50/ay) uygulanır. Bunun dışında: Apple Developer Program **$99/yıl** (zorunlu), Google Play **$25 tek seferlik**. Yani lansmana kadar toplam mağaza maliyeti ~$124, sonrasında sadece komisyon oranı işler.
+**Çıkış kriteri:** Gerçek kullanıcılar uçtan uca akışı sorunsuz tamamlayabiliyor.
 
 ---
 
-## Faz 7 — App Store / Google Play Lansmanı (2-4 hafta)
+## Faz 6 — Ticarileşme Altyapısı (Faz 5 ile paralel başlanabilir)
 
-- [ ] Store listing (ekran görüntüleri, açıklama, Carbon & Champagne marka diliyle tutarlı)
-- [ ] Gizlilik politikası, KVKK/GDPR uyumluluğu (kullanıcı fotoğrafları hassas veri sayılabilir, özellikle VTON için — bunu hukuki olarak netleştirin)
-- [ ] App Store / Play Store inceleme sürecine hazırlık (VTON gibi "kullanıcı fotoğrafı işleyen" özellikler bazen ek inceleme gerektirir)
-- [ ] Soft launch (tek bir pazar/ülke) → gözlem → geniş lansman
+- [ ] StoreKit (iOS) / Play Billing (Android) — Aura Black abonelik akışı
+- [ ] Affiliate/komisyon altyapısı (Farfetch/SSENSE/Beymen)
+- [ ] Plan bazlı özellik kısıtlamaları gerçek billing'e bağlanması
+
+**Çıkış kriteri:** Gerçek parayla Aura Black'e geçilebiliyor, kısıtlamalar doğru uygulanıyor.
+
+> 💰 Mağaza komisyonu: Küçük İşletme Programı'na kayıtlıysanız %15, kayıtsız ilk yıl Apple'da %30. Apple Developer $99/yıl, Google Play $25 tek seferlik.
+
+---
+
+## Faz 7 — App Store / Google Play Lansmanı
+
+- [ ] Store listing (Carbon & Champagne diliyle tutarlı)
+- [ ] Gizlilik politikası, KVKK/GDPR uyumluluğu (VTON fotoğrafları hassas veri)
+- [ ] Mağaza inceleme sürecine hazırlık
+- [ ] Soft launch → gözlem → geniş lansman
 
 **Çıkış kriteri:** Uygulama mağazalarda, gerçek kullanıcılar indirebiliyor.
 
@@ -141,52 +143,28 @@ Az önce konuştuğumuz özellik — MVP'nin **farklılaştırıcı** parçası,
 
 ## Zaman Çizelgesi Özeti
 
-| Faz | Süre (tahmini) | Paralel çalışılabilir mi |
+| Faz | Süre (tahmini) | Durum |
 |---|---|---|
-| 0 — Orientation zincirini bitir | 1-2 hafta | — |
-| 1 — Auth + Cloud GPU | 2-3 hafta | Kısmen (1a/1b ayrı kişi/zaman) |
-| 2 — Object Storage | 1-2 hafta | Faz 1 ile paralel |
-| 3 — VTON Sertleştirme | 2-3 hafta | — |
-| 4 — 3D İncele | 1-2 hafta | Faz 1-3 ile paralel başlanabilir |
+| 0-2 — Altyapı | — | ✅ Tamamlandı |
+| **3 — Ürün Kalitesi (VTON+UI+Chat)** | **3-4 hafta** | **🎯 Şimdiki odak** |
+| 3.5 — Ertelenen altyapı | 1 hafta | Faz 3 sonrası |
+| 4 — 3D İncele | 1-2 hafta | Faz 3 ile paralel başlanabilir |
 | 5 — Kapalı Beta | 2-3 hafta | — |
 | 6 — Ticarileşme | 2 hafta | Faz 5 ile paralel |
 | 7 — Lansman | 2-4 hafta | — |
-
-**Toplam, tek geliştirici olarak, gerçekçi tempo ile: yaklaşık 3.5-4.5 ay** (roadmap'inizdeki 2027 hedefinden çok daha erken — haklısınız, mevcut ilerleme hızınız ve disiplininiz göz önüne alındığında bu, 2026 sonu/2027 başı gibi bir pencereye sığar).
-
----
-
-## Maliyet Özeti (aylık, tahmini, 2026 fiyatlarıyla)
-
-Bu rakamlar **kaba tahminler** — gerçek trafiğiniz oluştuğunda değişecektir, ama bütçe planlaması için bir başlangıç noktası:
-
-| Kalem | Ne zaman başlar | Aylık tahmini (küçük ölçek: ~500-1.000 aktif kullanıcı) |
-|---|---|---|
-| Cloud GPU (VTON, RunPod Serverless) | Faz 1b | $10-40 (scale-to-zero, kullanım bazlı) |
-| Object Storage (Cloudflare R2) | Faz 2 | $1-5 (egress ücretsiz olduğu için düşük kalır) |
-| CDN | Faz 2 | Genelde R2 ile birlikte $0'a yakın (Cloudflare ekosistemi) |
-| Apple Developer Program | Faz 7 öncesi | $99/**yıl** (aylığa böldüğünüzde ~$8.25) |
-| Google Play Developer | Faz 7 öncesi | $25 **tek seferlik** |
-| Mağaza komisyonu | Gelir oluştukça | Gelirin %15'i (Küçük İşletme Programı'na kayıtlıysanız) |
-| Redis (rate-limit + kuyruk) | Faz 1a | $0-10 (küçük ölçekte ücretsiz tier'lar genelde yeterli — Upstash, Redis Cloud) |
-| PostgreSQL (managed) | Faz 1a | $0-15 (Supabase/Neon gibi sağlayıcıların ücretsiz tier'ı küçük ölçekte yeterli olabilir) |
-
-**Kabaca toplam, ilk aylarda (düşük trafik):** GPU maliyeti hariç ayda **$15-50** bandında, sonra kullanıcı/VTON hacmi arttıkça esas olarak **GPU maliyeti** ölçekle birlikte büyüyecek kalem olacak — bu yüzden Faz 1b'deki kota sayacı gerçekten kritik, orası kontrolsüz büyüyebilecek tek kalem.
-
-**Not:** Bu tahminler yaklaşık; her fazın başında Cursor/Claude Code turlarında gerçek kullanım verisiyle (RunPod dashboard, R2 kullanım raporu) bu rakamları güncelleyip daha kesin bütçe çıkarabiliriz.
 
 ---
 
 ## Öncelik Felsefesi — Neden Bu Sıra?
 
-1. **Faz 0 bitmeden hiçbir şeye başlamayın** — temel doğruluk (orientation/format) olmadan üstüne inşa edeceğiniz her şey (VTON kalitesi, beta geri bildirimi) kirli veri üzerine kurulur.
-2. **Auth, cloud GPU'dan önce** — daha önce netleştirdiğimiz maliyet-risk sıralaması hâlâ geçerli.
-3. **3D İncele özelliğini erken, paralel bir dal olarak düşünün** — hem düşük riskli (mevcut pipeline'ı bozmuyor) hem de yatırımcı/kullanıcı gösterimi için yüksek etkili, bu yüzden "sona bırakılacak bir güzellik" değil, erken bir farklılaştırıcı olarak konumlandırdım.
-4. **Beta, ticarileşmeden önce** — para almadan önce gerçek kullanıcıların akışı tamamlayabildiğini görmek istiyorsunuz.
-5. **Lansman en sona** — mağaza inceleme süreçleri öngörülemez, en son ve en esnek zaman dilimini buna ayırın.
+1. **Altyapı olmadan ürün işi anlamsızdı** — güvensiz/çalışmayan bir boru hattı üzerine kalite işi yapıp sonra o boru hattını değiştirmek, yapılan işi çöpe atmak demekti. Bu artık geride kaldı.
+2. **Şimdi ürünün kendisi öncelikli** — altyapı görünmez, kalite ve tasarım görünür. Kullanıcı test etmeden önce bu boşluk kapanmalı.
+3. **3D İncele, kalite işiyle paralel gidebilir** — farklı bir teknik yüzey (derinlik haritası, WebGL), VTON/UI işini bloklamıyor.
+4. **Ertelenen altyapı gerçekten ertelenebilir** — plan bazlı kota ve maliyet izleme, tek kullanıcılı/düşük trafikli bu aşamada acil değil; ticarileşmeden hemen önce yeterli.
+5. **Beta, ticarileşmeden önce** — para almadan önce akışın çalıştığını görmek gerekiyor.
 
 ---
 
 ## Bu Yol Haritasını Nasıl Kullanalım
 
-Her faz başladığında, o fazın ilk büyük görevi için birlikte Cursor promptu hazırlarız (tıpkı Faz 0'da yaptığımız gibi: Cursor uygular → Claude Code denetler → siz commit'lersiniz). Faz tamamlandığında, çıkış kriterini birlikte gözden geçirip bir sonraki faza geçeriz. İsterseniz bu dosyayı projenizin kök dizinine (`ROADMAP.md` gibi) koyup zaman içinde işaretleyerek (checkbox) ilerlememizi takip edebiliriz.
+Her görev için birlikte Cursor promptu hazırlarız (Cursor uygular → Claude Code denetler → siz commit'lersiniz). Görsel/tasarım işleri için Cursor'a farklı türden promptlar (estetik karar odaklı, kod-mantığı değil) gerekecek — bu, üzerinde ayrıca konuşacağımız bir yöntem farkı. Faz tamamlandığında çıkış kriterini gözden geçirip sıradakine geçeriz.
