@@ -22,6 +22,11 @@ Bu bölüm sıkıştırılmış bir özet — detaylı denetim geçmişi commit 
 - [x] RunPod deploy, gerçek uçtan uca test (register→login→VTON→COMPLETED→DB)
 - [x] Timeout/retry/cold-start toleransı, kullanıcı bazlı günlük kota (HTTP 429)
 - [x] **5 turluk SSRF denetim zinciri** — Wardrobe SSRF, DNS TOCTOU, TLS host doğrulama, kalıcı DNS ele geçirme, resolveResultBytes — hepsi Java+Python'da kapatıldı
+- [x] RunPod worker hata işleme sertleştirmesi (2026-09-27): FAILED ve
+      boş-output senaryolarında sahte mock:// URI üretimi kaldırıldı,
+      kota iadesi her iki durumda da doğrulandı. Bulgu OpenCode'un
+      ücretsiz bir modelle yaptığı bağımsız analizden geldi, Claude Code
+      ile denetlendi.
 
 ### Faz 2 — Object Storage (Cloudflare R2)
 - [x] Base64/DB'den R2'ye taşıma, presigned upload, region=auto (SigV4)
@@ -51,16 +56,29 @@ Buraya kadarki her şey kullanıcının **görmediği** işti. Şimdi kullanıc�
 
 **Çıkış kriteri:** VTON çıktısı, "bariz AI üretimi" değil, "gerçek bir ürün fotoğrafı" gibi hissettiriyor.
 
-### 3b. Arayüz Yeniden Tasarımı
+### 3b. Arayüz Yeniden Tasarımı — Quiet Luxury Pivot (sıcak, açık palet)
 
-Mevcut arayüz "şık değil, jenerik bir AI uygulaması gibi" — bu, Carbon & Champagne marka dilinin henüz gerçek bir görsel kimliğe dönüşmediğinin işareti.
+**Karar:** Carbon & Champagne'ın koyu kimliğinden, sıcak/açık "quiet luxury"
+paletine geçiş (krem zemin, kahve-altın vurgu). Bu bir marka pivotu, küçük
+bir ayar değil.
 
-- [ ] Mevcut ekranların (dolap, VTON sonucu, stylist chat) tasarım denetimi — neyin "jenerik" hissettirdiğini somutlaştırma
-- [ ] Tipografi, boşluk kullanımı, mikro-etkileşim (geçiş animasyonları, dokunma geri bildirimi) revizyonu
-- [ ] Carbon & Champagne paletinin (#0F1115, #D4AF37) tutarlı, iddialı biçimde uygulanması — şu an muhtemelen sadece renk paleti seviyesinde kalmış, kompozisyon/hiyerarşi seviyesine taşınmalı
-- [ ] Referans analizi: lüks moda/yaşam tarzı uygulamalarının (bilinçli olarak jenerik olmayan) tasarım dilinin incelenmesi
+**Onaylanan palet:**
+- Zemin: #F2ECDC · Header gradyanı: #C08A4E→#8B5A2B
+- Kart: #FFFFFF/#FAF6EC · Ana buton: #3D2B1F
+- Metin birincil: #2B2118 · Metin ikincil: #8A7A68 · Nadir vurgu: #D4A548
 
-**Çıkış kriteri:** Uygulamayı ilk açan biri "bu bir lüks moda ürünü" hissediyor, "bir AI demo'su" değil.
+**Tipografi:** Başlık = Fraunces (serif, karakterli), Gövde/UI = Manrope
+
+- [ ] 3b.0 — Tasarım sistemi temeli (ThemeData, font, ikon paketi, radius/gölge kuralı)
+- [ ] 3b.1 — Pilot: Aura AI chat ekranı (en düşük risk, sistemi doğrula)
+- [ ] 3b.2 — Dolap ekranı (+ güven skoru gizleme, dil tutarlılığı, duplicate kart kontrolü)
+- [ ] 3b.3 — Öneri ekranı (+ özel slider tasarımı)
+- [ ] 3b.4 — Arşiv ekranı (+ rozet hiyerarşisi, kırmızı ikon düzeltmesi, boş durum metni)
+- [ ] 3b.5 — Raf ekranı IA ayrımı (hesap/çıkış → ayrı Ayarlar ekranı)
+- [ ] 3b.6 — Son öz-eleştiri turu (5 ekranın güncel hali, üç ilkeye göre)
+
+**Çıkış kriteri:** Beş ekran de yeni palette/tipografiye geçmiş, ham/teknik
+veri kullanıcı arayüzünden temizlenmiş, tek bir tutarlı ikon seti kullanılıyor.
 
 ### 3c. AI Stylist Chat Geliştirmesi
 
