@@ -173,6 +173,14 @@ public class RunPodVtonWorkerClient implements VtonWorkerClient {
             resultB64 = textOrNull(root, "resultImageBase64");
         }
 
+        // RunPod dis zarf COMPLETED olsa da handler output.ok=false /
+        // output.status=FAILED donebilir. Bu is basarisizdir; sonuc URI'si yok.
+        if (outputReportsFailure(output)) {
+            auraStatus = "FAILED";
+            resultUri = null;
+            resultB64 = null;
+        }
+
         return new WorkerStatusSnapshot(auraStatus, resultUri, resultB64, errorMessage);
     }
 
@@ -236,6 +244,28 @@ public class RunPodVtonWorkerClient implements VtonWorkerClient {
         String detail = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
         return new VtonWorkerUnavailableException(
                 "VTON worker (%s) erisilemiyor: %s".formatted(operation, detail), cause);
+    }
+
+    /**
+     * Handler govdesi basarisiz. {@code ok} yoksa veya {@code status} yoksa
+     * dis zarf tek basina karar verir.
+     */
+    static boolean outputReportsFailure(JsonNode output) {
+        if (output == null || output.isMissingNode() || output.isNull() || !output.isObject()) {
+            return false;
+        }
+        JsonNode ok = output.get("ok");
+        if (ok != null && !ok.isNull() && ok.isBoolean() && !ok.booleanValue()) {
+            return true;
+        }
+        String inner = textOrNull(output, "status");
+        if (inner == null) {
+            return false;
+        }
+        return switch (inner.trim().toUpperCase()) {
+            case "FAILED", "FAILURE" -> true;
+            default -> false;
+        };
     }
 
     static String mapRunPodStatus(String runpodStatus) {

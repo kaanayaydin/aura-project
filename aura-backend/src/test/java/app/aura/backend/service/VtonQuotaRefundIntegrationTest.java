@@ -20,9 +20,14 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.test.web.client.match.MockRestRequestMatchers;
+import org.springframework.test.web.client.response.MockRestResponseCreators;
+import org.springframework.web.client.RestClient;
 
 /**
  * Worker basarisizliginda kota iadesi.
@@ -101,5 +106,46 @@ class VtonQuotaRefundIntegrationTest {
         vtonService.status(created.jobId(), user.getId());
         User afterSecond = userRepository.findById(user.getId()).orElseThrow();
         assertThat(afterSecond.getDailyVtonCount()).isEqualTo(0);
+    }
+
+    @Test
+    void completedEnvelopeWithFailedOutputRefundsQuotaAndSkipsMockUri() {
+        User user = new User("vton-envelope-fail", "vton-envelope-fail@aura.app");
+        user.addWardrobeItem(new WardrobeItem("shirt", 0.9, PNG, "image/png", "blue"));
+        user = userRepository.save(user);
+        Long itemId = user.getWardrobeItems().getFirst().getId();
+
+        when(vtonWorkerClient.enqueue(any())).thenReturn("rp-job-17");
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl("https://api.runpod.ai/v2/endpoint-xyz");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(MockRestRequestMatchers.requestTo(
+                        "https://api.runpod.ai/v2/endpoint-xyz/status/rp-job-17"))
+                .andRespond(MockRestResponseCreators.withSuccess(
+                        """
+                        {"status":"COMPLETED","output":{"ok":false,"status":"FAILED","errorMessage":"[INFERENCE_ERROR] CatVTON inference basarisiz"}}
+                        """,
+                        MediaType.APPLICATION_JSON));
+        VtonProperties properties = new VtonProperties(
+                false, false, "runpod", "https://api.runpod.ai/v2/endpoint-xyz", "k",
+                "/run", "/status/{id}", 10, 90, 30, 120, 30, false, 0L, 5);
+        RunPodVtonWorkerClient runPod = new RunPodVtonWorkerClient(builder.build(), properties, millis -> {});
+        when(vtonWorkerClient.status("rp-job-17")).thenAnswer(invocation -> runPod.status("rp-job-17"));
+
+        var created = vtonService.request(user.getId(), new VtonRequest(itemId, null, PNG, null));
+        var response = vtonService.status(created.jobId(), user.getId());
+
+        assertThat(response.status()).isEqualTo(VtonJobStatus.FAILED);
+        assertThat(response.errorMessage()).contains("INFERENCE_ERROR");
+        assertThat(response.resultImageUri()).isNull();
+
+        VtonJob job = vtonJobRepository.findById(created.jobId()).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(VtonJobStatus.FAILED);
+        assertThat(job.getErrorMessage()).contains("INFERENCE_ERROR");
+        assertThat(job.getResultImageUri()).isNull();
+        assertThat(job.isQuotaCharged()).isTrue();
+        assertThat(job.isQuotaRefunded()).isTrue();
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getDailyVtonCount()).isZero();
+        server.verify();
     }
 }

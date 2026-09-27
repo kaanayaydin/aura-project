@@ -92,6 +92,36 @@ class RunPodVtonWorkerClientTest {
     }
 
     @Test
+    void statusTreatsCompletedEnvelopeWithFailedOutputAsFailure() {
+        server.expect(requestTo("https://api.runpod.ai/v2/endpoint-xyz/status/rp-job-17"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        """
+                        {
+                          "id":"rp-job-17",
+                          "status":"COMPLETED",
+                          "delayTime":15884,
+                          "executionTime":80737,
+                          "output":{
+                            "ok":false,
+                            "status":"FAILED",
+                            "errorMessage":"[INFERENCE_ERROR] CatVTON inference basarisiz (ClientError): PutObject",
+                            "jobId":"17"
+                          }
+                        }
+                        """,
+                        MediaType.APPLICATION_JSON));
+
+        var snapshot = client.status("rp-job-17");
+
+        assertThat(snapshot.status()).isEqualTo("FAILED");
+        assertThat(snapshot.errorMessage()).contains("INFERENCE_ERROR");
+        assertThat(snapshot.resultImageUri()).isNull();
+        assertThat(snapshot.resultImageBase64()).isNull();
+        server.verify();
+    }
+
+    @Test
     void statusMapsInQueueAndInProgress() {
         assertThat(RunPodVtonWorkerClient.mapRunPodStatus("IN_QUEUE")).isEqualTo("QUEUED");
         assertThat(RunPodVtonWorkerClient.mapRunPodStatus("IN_PROGRESS")).isEqualTo("PROCESSING");
