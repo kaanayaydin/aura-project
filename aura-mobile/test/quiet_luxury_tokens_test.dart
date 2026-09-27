@@ -30,10 +30,12 @@ void main() {
     expect(QuietLuxuryNavIcons.raf, isNotNull);
   });
 
-  test('quiet luxury yalnizca aura chat pilotunda kullanilir', () {
+  test('quiet luxury yalnizca chat ve dolap ekranlarinda kullanilir', () {
     const allowed = {
       'lib/screens/aura_chat_screen.dart',
       'lib/widgets/chat_bubble.dart',
+      'lib/screens/wardrobe_screen.dart',
+      'lib/widgets/wardrobe_tile.dart',
     };
     final offenders = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/category_labels.dart';
 import '../core/config.dart';
 import '../models/auth_token.dart';
 import '../models/chat_message.dart';
@@ -251,7 +252,7 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
         _phase.setIdle();
         await refresh(silent: true);
         return const WardrobeUploadDone(
-          'Vision analiz tamam ama kategori bulunamadi; dolaba yazilmadi.',
+          'Analiz tamam ama bir kategori bulunamadı; dolaba eklenmedi.',
         );
       }
 
@@ -288,7 +289,7 @@ class WardrobeNotifier extends AsyncNotifier<List<WardrobeItem>> {
         // (alreadyNormalized false). Onay yolu ayrı true gönderir.
         alreadyNormalized: false,
         message:
-            'Analiz tamam (${best.category}). Stüdyo normalize dolaba kaydedildi.',
+            'Analiz tamam. ${categoryDisplayLabel(best.category)} dolaba eklendi.',
       );
     } catch (error) {
       _phase.setError('$error');

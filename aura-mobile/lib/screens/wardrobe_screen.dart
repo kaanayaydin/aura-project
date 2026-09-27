@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../core/theme.dart';
+import '../core/category_labels.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/orientation_choice.dart';
 import '../models/wardrobe_upload_outcome.dart';
 import '../providers/providers.dart';
@@ -31,36 +34,32 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
     final pendingSave = uploadPhase is WardrobeUploadSaving ? uploadPhase : null;
 
     return Scaffold(
+      backgroundColor: AuraColors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+              padding: const EdgeInsets.fromLTRB(28, 18, 16, 12),
               child: Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Aura',
-                          style: Theme.of(context).textTheme.displayMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Sanal dolabin',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AuraTheme.mistMuted,
-                              ),
-                        ),
+                        Text('Aura', style: AuraTypography.h3),
+                        const SizedBox(height: 6),
+                        Text('Sanal dolabın', style: AuraTypography.caption),
                       ],
                     ),
                   ),
                   IconButton(
                     tooltip: 'Yenile',
                     onPressed: () => ref.read(wardrobeProvider.notifier).refresh(),
-                    icon: const Icon(Icons.refresh_rounded),
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: AuraColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -68,7 +67,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
             Expanded(
               child: wardrobe.when(
                 loading: () => const Center(
-                  child: CircularProgressIndicator(color: AuraTheme.champagne),
+                  child: CircularProgressIndicator(color: AuraColors.primaryAction),
                 ),
                 error: (error, _) => _ErrorPane(
                   message: _friendlyError(error),
@@ -106,6 +105,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                         label: 'Kategori',
                         options: categories,
                         selected: _categoryFilter,
+                        display: categoryDisplayLabel,
                         onSelected: (value) => setState(() => _categoryFilter = value),
                       ),
                       if (colors.isNotEmpty)
@@ -117,8 +117,8 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                         ),
                       Expanded(
                         child: RefreshIndicator(
-                          color: AuraTheme.champagne,
-                          backgroundColor: AuraTheme.carbonElevated,
+                          color: AuraColors.primaryAction,
+                          backgroundColor: AuraColors.surfaceElevated,
                           onRefresh: () =>
                               ref.read(wardrobeProvider.notifier).refresh(),
                           child: gridCount == 0
@@ -127,19 +127,19 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                                     SizedBox(height: 80),
                                     Center(
                                       child: Text(
-                                        'Filtreye uyan parca yok.',
-                                        style: TextStyle(color: AuraTheme.mistMuted),
+                                        'Filtreye uyan parça yok.',
+                                        style: TextStyle(color: AuraColors.textSecondary),
                                       ),
                                     ),
                                   ],
                                 )
                               : GridView.builder(
-                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                                  padding: const EdgeInsets.fromLTRB(22, 16, 22, 112),
                                   gridDelegate:
                                       const SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 2,
-                                    mainAxisSpacing: 12,
-                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 16,
+                                    crossAxisSpacing: 16,
                                     childAspectRatio: 0.72,
                                   ),
                                   itemCount: gridCount,
@@ -178,8 +178,10 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showUploadSheet(context),
+        backgroundColor: AuraColors.primaryAction,
+        foregroundColor: AuraColors.surface,
         icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text('Fotograf ekle'),
+        label: const Text('Fotoğraf ekle'),
       ),
     );
   }
@@ -187,7 +189,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
   Future<void> _showUploadSheet(BuildContext context) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: AuraTheme.carbonElevated,
+      backgroundColor: AuraColors.surfaceElevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -202,19 +204,25 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AuraTheme.carbonSoft,
+                    color: AuraColors.textSecondary.withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text('Galeriden sec'),
+                  leading: const Icon(
+                    Icons.photo_library_outlined,
+                    color: AuraColors.textPrimary,
+                  ),
+                  title: Text('Galeriden seç', style: AuraTypography.body),
                   onTap: () => Navigator.pop(context, ImageSource.gallery),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
-                  title: const Text('Kamera ile cek'),
+                  leading: const Icon(
+                    Icons.photo_camera_outlined,
+                    color: AuraColors.textPrimary,
+                  ),
+                  title: Text('Kamera ile çek', style: AuraTypography.body),
                   onTap: () => Navigator.pop(context, ImageSource.camera),
                 ),
               ],
@@ -229,7 +237,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(
-        child: CircularProgressIndicator(color: AuraTheme.champagne),
+        child: CircularProgressIndicator(color: AuraColors.surface),
       ),
     );
 
@@ -242,7 +250,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
       switch (outcome) {
         case WardrobeUploadCancelled():
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Iptal edildi.')),
+            const SnackBar(content: Text('İptal edildi.')),
           );
         case WardrobeUploadDone(:final message):
           ScaffoldMessenger.of(context).showSnackBar(
@@ -294,7 +302,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
 
   String _friendlyError(Object error) {
     if (error is ApiException) return error.message;
-    return 'Baglanti hatasi: backend (8080) veya vision (8000) ayakta mi?';
+    return 'Bağlantı hatası. Lütfen tekrar dene.';
   }
 }
 
@@ -312,11 +320,9 @@ class _PendingWardrobeTile extends StatelessWidget {
     return Container(
       key: const Key('pending-wardrobe-thumb'),
       decoration: BoxDecoration(
-        color: const Color(0xFF161920),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AuraTheme.champagneGold.withValues(alpha: 0.35),
-        ),
+        color: AuraColors.surface,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -327,15 +333,15 @@ class _PendingWardrobeTile extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
-                const ColoredBox(
-                  color: Color(0x660F1115),
-                  child: Center(
+                ColoredBox(
+                  color: AuraColors.primaryAction.withValues(alpha: 0.45),
+                  child: const Center(
                     child: SizedBox(
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AuraTheme.champagneGold,
+                        color: AuraColors.surface,
                       ),
                     ),
                   ),
@@ -344,26 +350,18 @@ class _PendingWardrobeTile extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  category,
+                  categoryDisplayLabel(category),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 15,
-                      ),
+                  style: AuraTypography.body.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'kaydediliyor…',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AuraTheme.mistMuted,
-                        fontSize: 12,
-                      ),
-                ),
+                Text('kaydediliyor…', style: AuraTypography.caption),
               ],
             ),
           ),
@@ -379,6 +377,7 @@ class _FilterBar extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onSelected,
+    this.display,
   });
 
   final String label;
@@ -386,55 +385,58 @@ class _FilterBar extends StatelessWidget {
   final String? selected;
   final ValueChanged<String?> onSelected;
 
+  /// Çip üstündeki yazı. Karşılaştırma her zaman ham [options] değeriyle kalır.
+  final String Function(String value)? display;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: 56,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 22),
         children: [
           Padding(
-            padding: const EdgeInsets.only(right: 8, top: 10),
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AuraTheme.mistMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            padding: const EdgeInsets.only(right: 10, top: 16),
+            child: Text(label, style: AuraTypography.caption),
           ),
-          FilterChip(
-            label: const Text('Tumu'),
-            selected: selected == null,
-            onSelected: (_) => onSelected(null),
-            selectedColor: AuraTheme.champagne.withValues(alpha: 0.22),
-            labelStyle: TextStyle(
-              color: selected == null ? AuraTheme.champagne : AuraTheme.mist,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
+          _chip(
+            label: 'Tümü',
+            isSelected: selected == null,
+            onTap: () => onSelected(null),
           ),
-          const SizedBox(width: 6),
           ...options.map(
-            (option) => Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: FilterChip(
-                label: Text(option),
-                selected: selected == option,
-                onSelected: (_) =>
-                    onSelected(selected == option ? null : option),
-                selectedColor: AuraTheme.champagne.withValues(alpha: 0.22),
-                labelStyle: TextStyle(
-                  color: selected == option ? AuraTheme.champagne : AuraTheme.mist,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
+            (option) => _chip(
+              label: display?.call(option) ?? option,
+              isSelected: selected == option,
+              onTap: () => onSelected(selected == option ? null : option),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _chip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (_) => onTap(),
+        showCheckmark: false,
+        selectedColor: AuraColors.primaryAction,
+        backgroundColor: AuraColors.surface,
+        side: BorderSide.none,
+        labelStyle: TextStyle(
+          color: isSelected ? AuraColors.surface : AuraColors.textSecondary,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -447,25 +449,32 @@ class _EmptyWardrobe extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.checkroom_outlined, size: 56, color: AuraTheme.mistMuted),
-            const SizedBox(height: 16),
-            Text(
-              'Dolap bos',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Bir kiyafet fotografi ekle; Vision analiz edip dolaba yazar.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AuraTheme.mistMuted,
-                  ),
-            ),
-          ],
+        padding: const EdgeInsets.all(28),
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: AuraColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+            boxShadow: AuraShadows.cardShadow,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.checkroom_outlined,
+                size: 56,
+                color: AuraColors.textSecondary,
+              ),
+              const SizedBox(height: 18),
+              Text('Dolap boş', style: AuraTypography.h3),
+              const SizedBox(height: 10),
+              Text(
+                'Bir kıyafet fotoğrafı ekle; analiz edip dolabına eklensin.',
+                textAlign: TextAlign.center,
+                style: AuraTypography.bodySecondary,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -486,9 +495,20 @@ class _ErrorPane extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(message, textAlign: TextAlign.center),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AuraTypography.body,
+            ),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: onRetry, child: const Text('Tekrar dene')),
+            ElevatedButton(
+              onPressed: onRetry,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AuraColors.primaryAction,
+                foregroundColor: AuraColors.surface,
+              ),
+              child: const Text('Tekrar dene'),
+            ),
           ],
         ),
       ),

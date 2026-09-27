@@ -151,7 +151,7 @@ class ApiService {
           body: jsonEncode(body),
         )
         .timeout(_timeout);
-    _ensureOk(response, 'JWT alinamadi');
+    _ensureOk(response, 'Oturum alınamadı');
     return AuthSession.fromDemoJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -288,7 +288,7 @@ class ApiService {
     final streamed =
         await _client.send(request).timeout(const Duration(minutes: 3));
     final response = await http.Response.fromStream(streamed);
-    _ensureOk(response, 'Vision analizi basarisiz');
+    _ensureOk(response, 'Analiz başarısız oldu.');
     return AnalyzeResult.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -316,7 +316,7 @@ class ApiService {
     final streamed =
         await _client.send(request).timeout(const Duration(minutes: 2));
     final response = await http.Response.fromStream(streamed);
-    _ensureOk(response, 'Garment normalize basarisiz');
+    _ensureOk(response, 'Kıyafet görseli hazırlanamadı.');
     final json =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
     try {
@@ -539,7 +539,7 @@ class ApiService {
       'userId': ?userId,
     };
     final response = await _authPost(uri, body: jsonEncode(body));
-    _ensureOk(response, 'VTON istegi basarisiz');
+    _ensureOk(response, 'Sanal deneme başlatılamadı.');
     return VtonJob.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -548,7 +548,7 @@ class ApiService {
   Future<VtonJob> fetchVtonStatus(int jobId, {int? userId}) async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/aura/vton/status/$jobId');
     final response = await _authGet(uri);
-    _ensureOk(response, 'VTON durumu alinamadi');
+    _ensureOk(response, 'Sanal deneme durumu alınamadı.');
     return VtonJob.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );

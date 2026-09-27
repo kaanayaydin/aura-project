@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
+import '../core/category_labels.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/wardrobe_item.dart';
 import 'aura_image.dart';
 
@@ -13,9 +16,9 @@ class WardrobeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AuraTheme.carbonSoft),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -29,27 +32,12 @@ class WardrobeTile extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.category,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 15,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'guven ${item.confidenceLabel}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AuraTheme.mistMuted,
-                        fontSize: 12,
-                      ),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: Text(
+              categoryDisplayLabel(item.category),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AuraTypography.body.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ],

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/category_labels.dart';
 import '../core/theme.dart';
 import '../models/vton_job.dart';
 import '../models/wardrobe_item.dart';
@@ -231,7 +232,7 @@ class _WardrobeItemDetailScreenState
     return Scaffold(
       backgroundColor: AuraTheme.carbon,
       appBar: AppBar(
-        title: Text(item.category),
+        title: Text(categoryDisplayLabel(item.category)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -249,19 +250,18 @@ class _WardrobeItemDetailScreenState
               ),
               const SizedBox(height: 18),
               Text(
-                item.category,
+                categoryDisplayLabel(item.category),
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 6),
-              Text(
-                [
-                  if (item.color != null && item.color!.isNotEmpty) item.color!,
-                  'güven ${item.confidenceLabel}',
-                ].join(' · '),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AuraTheme.mistMuted,
-                    ),
-              ),
+              if (item.color != null && item.color!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  item.color!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AuraTheme.mistMuted,
+                      ),
+                ),
+              ],
               const SizedBox(height: 28),
               if (!hasPreview)
                 ElevatedButton(
