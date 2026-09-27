@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/accord_labels.dart';
 import '../core/quiet_luxury/aura_colors.dart';
 import '../core/quiet_luxury/aura_shape.dart';
 import '../core/quiet_luxury/aura_typography.dart';
@@ -75,7 +76,7 @@ class PerfumeRecommendationCard extends StatelessWidget {
                       color: AuraColors.surface,
                       borderRadius: BorderRadius.circular(AuraRadii.pillRadius),
                     ),
-                    child: Text(chord, style: AuraTypography.caption),
+                    child: Text(accordDisplayLabel(chord), style: AuraTypography.caption),
                   ),
                 )
                 .toList(),

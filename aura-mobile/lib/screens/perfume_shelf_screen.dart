@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/theme.dart';
+import '../core/accord_labels.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/user_perfume.dart';
 import '../providers/providers.dart';
 import '../services/api_service.dart';
+import 'settings_screen.dart';
 
 /// Katalogdan favori secip kisisel parfum rafina ekleme ekrani.
 class PerfumeShelfScreen extends ConsumerWidget {
@@ -16,47 +20,62 @@ class PerfumeShelfScreen extends ConsumerWidget {
     final catalog = ref.watch(perfumeCatalogProvider);
 
     return Scaffold(
+      backgroundColor: AuraColors.background,
       body: SafeArea(
         child: RefreshIndicator(
-          color: AuraTheme.champagne,
-          backgroundColor: AuraTheme.carbonElevated,
+          color: AuraColors.primaryAction,
+          backgroundColor: AuraColors.surfaceElevated,
           onRefresh: () async {
             await ref.read(perfumeShelfProvider.notifier).refresh();
             await ref.read(perfumeCatalogProvider.notifier).refresh();
           },
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            padding: const EdgeInsets.fromLTRB(28, 18, 16, 40),
             children: [
-              Text('Aura', style: Theme.of(context).textTheme.displayMedium),
-              const SizedBox(height: 4),
-              Text(
-                'Parfum rafın',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AuraTheme.mistMuted,
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Aura', style: AuraTypography.h3),
+                        const SizedBox(height: 6),
+                        Text('Parfüm rafın', style: AuraTypography.caption),
+                      ],
                     ),
-              ),
-              const SizedBox(height: 24),
-              _AccountSection(
-                onLogout: () => _logout(context, ref),
+                  ),
+                  IconButton(
+                    tooltip: 'Ayarlar',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.settings_outlined,
+                      color: AuraColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 28),
-              Text('Rafım', style: Theme.of(context).textTheme.headlineMedium),
+              Text('Rafım', style: AuraTypography.h3),
               const SizedBox(height: 12),
               shelf.when(
                 loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                  padding: EdgeInsets.symmetric(vertical: 28),
                   child: Center(
-                    child: CircularProgressIndicator(color: AuraTheme.champagne),
+                    child: CircularProgressIndicator(color: AuraColors.primaryAction),
                   ),
                 ),
                 error: (error, _) => _ErrorText(message: _friendly(error)),
                 data: (items) {
                   if (items.isEmpty) {
                     return Text(
-                      'Henuz favori yok. Asagidaki katalogdan ekle.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AuraTheme.mistMuted,
-                          ),
+                      'Henüz favori yok. Aşağıdaki katalogdan ekle.',
+                      style: AuraTypography.bodySecondary,
                     );
                   }
                   return Column(
@@ -74,21 +93,18 @@ class PerfumeShelfScreen extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 28),
-              Text('Katalog', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 4),
+              Text('Katalog', style: AuraTypography.h3),
+              const SizedBox(height: 6),
               Text(
-                'Kuratorlu niche secim — dokunarak rafa ekle',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AuraTheme.mistMuted,
-                      fontSize: 12,
-                    ),
+                'Küratörlü niş seçim — dokunarak rafa ekle',
+                style: AuraTypography.caption,
               ),
               const SizedBox(height: 12),
               catalog.when(
                 loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                  padding: EdgeInsets.symmetric(vertical: 28),
                   child: Center(
-                    child: CircularProgressIndicator(color: AuraTheme.champagne),
+                    child: CircularProgressIndicator(color: AuraColors.primaryAction),
                   ),
                 ),
                 error: (error, _) => _ErrorText(message: _friendly(error)),
@@ -117,7 +133,7 @@ class PerfumeShelfScreen extends ConsumerWidget {
       await ref.read(perfumeCatalogProvider.notifier).addToShelf(catalogId);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Parfum rafa eklendi.')),
+          const SnackBar(content: Text('Parfüm rafa eklendi.')),
         );
       }
     } catch (error) {
@@ -134,7 +150,7 @@ class PerfumeShelfScreen extends ConsumerWidget {
       await ref.read(perfumeShelfProvider.notifier).remove(id);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Parfum raftan cikarildi.')),
+          const SnackBar(content: Text('Parfüm raftan çıkarıldı.')),
         );
       }
     } catch (error) {
@@ -146,85 +162,9 @@ class PerfumeShelfScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AuraTheme.carbonElevated,
-        title: const Text('Cikis yap'),
-        content: const Text('Oturumun sonlandirilacak. Emin misin?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Vazgec'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AuraTheme.champagneGold),
-            child: const Text('Cikis Yap'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await ref.read(authSessionProvider.notifier).logout();
-  }
-
   String _friendly(Object error) {
     if (error is ApiException) return error.message;
-    return 'Baglanti hatasi: backend 8080 ayakta mi?';
-  }
-}
-
-class _AccountSection extends ConsumerWidget {
-  const _AccountSection({required this.onLogout});
-
-  final VoidCallback onLogout;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(authSessionProvider);
-    final label = session?.displayName?.isNotEmpty == true
-        ? session!.displayName!
-        : (session?.email.isNotEmpty == true
-            ? session!.email
-            : session?.username ?? 'Misafir');
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AuraTheme.champagneGold.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Hesap', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout, size: 18),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AuraTheme.champagneGold,
-                side: const BorderSide(color: AuraTheme.champagneGold),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              label: const Text('Cikis Yap'),
-            ),
-          ),
-        ],
-      ),
-    );
+    return 'Bağlantı kurulamadı. Lütfen tekrar dene.';
   }
 }
 
@@ -237,12 +177,12 @@ class _ShelfTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AuraTheme.champagne.withValues(alpha: 0.25)),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       child: Row(
         children: [
@@ -252,15 +192,12 @@ class _ShelfTile extends StatelessWidget {
               children: [
                 Text(
                   perfume.displayTitle,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
+                  style: AuraTypography.body.copyWith(fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
-                  perfume.chords.join(' · '),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AuraTheme.mistMuted,
-                        fontSize: 12,
-                      ),
+                  perfume.chords.map(accordDisplayLabel).join(' · '),
+                  style: AuraTypography.caption,
                 ),
               ],
             ),
@@ -268,7 +205,7 @@ class _ShelfTile extends StatelessWidget {
           if (onRemove != null)
             IconButton(
               onPressed: onRemove,
-              icon: const Icon(Icons.remove_circle_outline, color: AuraTheme.danger),
+              icon: const Icon(Icons.remove_circle_outline, color: AuraColors.error),
             ),
         ],
       ),
@@ -285,12 +222,12 @@ class _CatalogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AuraTheme.carbonSoft),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,54 +237,46 @@ class _CatalogTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   perfume.displayTitle,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
+                  style: AuraTypography.body.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               if (perfume.onShelf)
-                const Text(
+                Text(
                   'Rafta',
-                  style: TextStyle(
-                    color: AuraTheme.champagne,
+                  style: AuraTypography.caption.copyWith(
+                    color: AuraColors.primaryAction,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
                   ),
                 )
               else
                 TextButton(
                   onPressed: onAdd,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AuraColors.primaryAction,
+                  ),
                   child: const Text('Ekle'),
                 ),
             ],
           ),
           if (perfume.blurb != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              perfume.blurb!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AuraTheme.mistMuted,
-                    fontSize: 12,
-                  ),
-            ),
+            const SizedBox(height: 8),
+            Text(perfume.blurb!, style: AuraTypography.caption),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Wrap(
-            spacing: 6,
-            runSpacing: 4,
+            spacing: 8,
+            runSpacing: 6,
             children: perfume.chords
                 .map(
                   (chord) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AuraTheme.carbonSoft,
-                      borderRadius: BorderRadius.circular(999),
+                      color: AuraColors.surface,
+                      borderRadius: BorderRadius.circular(AuraRadii.pillRadius),
                     ),
                     child: Text(
-                      chord,
-                      style: const TextStyle(
-                        color: AuraTheme.champagne,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      accordDisplayLabel(chord),
+                      style: AuraTypography.caption,
                     ),
                   ),
                 )
@@ -366,6 +295,6 @@ class _ErrorText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(message, style: const TextStyle(color: AuraTheme.danger));
+    return Text(message, style: AuraTypography.body.copyWith(color: AuraColors.error));
   }
 }

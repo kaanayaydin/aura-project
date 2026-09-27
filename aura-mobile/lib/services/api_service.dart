@@ -421,7 +421,7 @@ class ApiService {
   Future<List<UserPerfume>> fetchPerfumeCatalog() async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/user/perfumes/catalog');
     final response = await _authGet(uri);
-    _ensureOk(response, 'Parfum katalogu alinamadi');
+    _ensureOk(response, 'Parfüm kataloğu alınamadı.');
     final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return list
         .whereType<Map<String, dynamic>>()
@@ -432,7 +432,7 @@ class ApiService {
   Future<List<UserPerfume>> fetchPerfumeShelf() async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/user/perfumes');
     final response = await _authGet(uri);
-    _ensureOk(response, 'Parfum rafi alinamadi');
+    _ensureOk(response, 'Parfüm rafı alınamadı.');
     final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return list
         .whereType<Map<String, dynamic>>()
@@ -446,7 +446,7 @@ class ApiService {
       uri,
       body: jsonEncode({'catalogId': catalogId}),
     );
-    _ensureOk(response, 'Parfum rafa eklenemedi');
+    _ensureOk(response, 'Parfüm rafa eklenemedi.');
     return UserPerfume.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -455,7 +455,7 @@ class ApiService {
   Future<void> removePerfumeFromShelf(int id) async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/user/perfumes/$id');
     final response = await _authDelete(uri);
-    _ensureOk(response, 'Parfum raftan cikarilamadi');
+    _ensureOk(response, 'Parfüm raftan çıkarılamadı.');
   }
 
   Future<OutfitFavorite> saveFavorite(SuggestionResponse suggestion) async {
