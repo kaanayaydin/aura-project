@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
+import '../core/category_labels.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/suggestion.dart';
 import 'aura_image.dart';
 
@@ -14,51 +17,37 @@ class SuggestedPieceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final item = piece?.item;
     return Container(
-      width: 148,
+      width: 156,
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: piece == null
-              ? AuraTheme.carbonSoft
-              : AuraTheme.champagne.withValues(alpha: 0.35),
-        ),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title.toUpperCase(),
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AuraTheme.champagne,
-                  fontSize: 11,
-                  letterSpacing: 1.2,
-                ),
-          ),
-          const SizedBox(height: 10),
+          Text(title, style: AuraTypography.caption),
+          const SizedBox(height: 12),
           AspectRatio(
             aspectRatio: 1,
             child: AuraImage(bytes: item?.decodedBytes, imageUrl: item?.displayUrl),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
-            item?.category ?? 'Eksik',
+            item == null ? 'Eksik' : categoryDisplayLabel(item.category),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 14),
+            style: AuraTypography.body.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
             piece == null
-                ? 'Dolapta uygun parca yok'
+                ? 'Dolapta uygun parça yok'
                 : 'skor ${(piece!.score * 100).round()}%',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                  fontSize: 11,
-                ),
+            style: AuraTypography.caption,
           ),
         ],
       ),

@@ -33,9 +33,14 @@ class WeatherSnapshot {
     );
   }
 
-  String get sourceLabel => source == 'open-meteo'
-      ? 'Canli'
-      : source == 'simulated'
-          ? 'Tahmini'
-          : source;
+  String get sourceLabel => weatherSourceDisplayLabel(source);
+}
+
+/// Hava kaynağını kullanıcı etiketine çevirir. `open-meteo` ekrana yazılmaz.
+String weatherSourceDisplayLabel(String source) {
+  return switch (source) {
+    'open-meteo' => 'Canlı',
+    'simulated' => 'Tahmini',
+    _ => source,
+  };
 }

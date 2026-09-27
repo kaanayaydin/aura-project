@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/suggestion.dart';
 
-/// Kombin onerisinin altinda gosterilen niche koku karti.
+/// Kombin önerisinin altında gösterilen koku kartı.
 class PerfumeRecommendationCard extends StatelessWidget {
   const PerfumeRecommendationCard({super.key, required this.perfume});
 
@@ -14,15 +16,11 @@ class PerfumeRecommendationCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2A2620), Color(0xFF1A1C1E)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AuraTheme.champagne.withValues(alpha: 0.28)),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -32,12 +30,12 @@ class PerfumeRecommendationCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: AuraTheme.champagne.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AuraColors.surface,
+                  borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
                 ),
                 child: const Icon(
                   Icons.spa_outlined,
-                  color: AuraTheme.champagne,
+                  color: AuraColors.primaryAction,
                   size: 22,
                 ),
               ),
@@ -46,20 +44,11 @@ class PerfumeRecommendationCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'KOKU / PARFUM ONERISI',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: AuraTheme.champagne,
-                            fontSize: 11,
-                            letterSpacing: 1.3,
-                          ),
-                    ),
+                    Text('Koku önerisi', style: AuraTypography.caption),
                     const SizedBox(height: 2),
                     Text(
                       perfume.displayTitle,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontSize: 18,
-                          ),
+                      style: AuraTypography.h3.copyWith(fontSize: 18),
                     ),
                   ],
                 ),
@@ -67,45 +56,32 @@ class PerfumeRecommendationCard extends StatelessWidget {
               _ScoreBadge(score: perfume.score),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            '${perfume.concentration}  ·  yayilim ${perfume.diffusion}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                  fontSize: 12,
-                ),
-          ),
           const SizedBox(height: 12),
           Text(
-            perfume.blurb,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+            '${perfume.concentration}  ·  yayılım ${perfume.diffusion}',
+            style: AuraTypography.caption,
           ),
+          const SizedBox(height: 12),
+          Text(perfume.blurb, style: AuraTypography.body),
           const SizedBox(height: 16),
           Wrap(
-            spacing: 6,
-            runSpacing: 6,
+            spacing: 8,
+            runSpacing: 8,
             children: perfume.chords
                 .map(
                   (chord) => Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AuraTheme.carbonSoft,
-                      borderRadius: BorderRadius.circular(999),
+                      color: AuraColors.surface,
+                      borderRadius: BorderRadius.circular(AuraRadii.pillRadius),
                     ),
-                    child: Text(
-                      chord,
-                      style: const TextStyle(
-                        color: AuraTheme.champagne,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: Text(chord, style: AuraTypography.caption),
                   ),
                 )
                 .toList(),
           ),
           const SizedBox(height: 18),
-          _NoteRow(label: 'Ust nota', notes: perfume.topNotes),
+          _NoteRow(label: 'Üst nota', notes: perfume.topNotes),
           const SizedBox(height: 8),
           _NoteRow(label: 'Kalp nota', notes: perfume.heartNotes),
           const SizedBox(height: 8),
@@ -113,29 +89,17 @@ class PerfumeRecommendationCard extends StatelessWidget {
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AuraTheme.carbon.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(12),
+              color: AuraColors.surface,
+              borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Termodinamik',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: AuraTheme.mistMuted,
-                        fontSize: 11,
-                      ),
-                ),
+                Text('Termodinamik', style: AuraTypography.caption),
                 const SizedBox(height: 4),
-                Text(
-                  perfume.thermodynamicNote,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontSize: 12,
-                        color: AuraTheme.mist,
-                      ),
-                ),
+                Text(perfume.thermodynamicNote, style: AuraTypography.bodySecondary),
               ],
             ),
           ),
@@ -155,15 +119,14 @@ class _ScoreBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AuraTheme.champagne.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(10),
+        color: AuraColors.surface,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
       ),
       child: Text(
         '${(score * 100).round()}%',
-        style: const TextStyle(
-          color: AuraTheme.champagne,
-          fontWeight: FontWeight.w800,
-          fontSize: 13,
+        style: AuraTypography.caption.copyWith(
+          color: AuraColors.primaryAction,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -182,20 +145,13 @@ class _NoteRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 72,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
+          width: 78,
+          child: Text(label, style: AuraTypography.caption),
         ),
         Expanded(
           child: Text(
             notes.isEmpty ? '—' : notes.join(' · '),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13),
+            style: AuraTypography.body,
           ),
         ),
       ],

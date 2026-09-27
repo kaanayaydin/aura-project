@@ -145,7 +145,7 @@ class ColorHarmonyInfo {
         'monochrome' => 'Monokrom',
         'analogous' => 'Uyumlu ton',
         'contrast' => 'Kontrast',
-        'neutral' => 'Notr',
+        'neutral' => 'Nötr',
         _ => type,
       };
 }
@@ -207,8 +207,8 @@ class PerfumeRecommendation {
 }
 
 enum OccasionOption {
-  meeting('meeting', 'Toplanti', 'Resmi / ofis'),
-  casual('casual', 'Gunluk', 'Rahat / sehir'),
+  meeting('meeting', 'Toplantı', 'Resmi / ofis'),
+  casual('casual', 'Günlük', 'Rahat / şehir'),
   sport('sport', 'Spor', 'Aktif / antrenman');
 
   const OccasionOption(this.apiValue, this.label, this.subtitle);
@@ -216,4 +216,24 @@ enum OccasionOption {
   final String apiValue;
   final String label;
   final String subtitle;
+}
+
+/// API `seasonBand` değeri durur; ekranda Türkçe etiket basılır.
+String seasonDisplayLabel(String raw) {
+  return switch (raw.trim().toLowerCase()) {
+    'hot' => 'sıcak',
+    'mild' => 'ılık',
+    'cool' => 'serin',
+    'cold' => 'soğuk',
+    _ => raw,
+  };
+}
+
+/// API `occasion` değeri durur; ekranda [OccasionOption.label] basılır.
+String occasionDisplayLabel(String raw) {
+  final key = raw.trim().toLowerCase();
+  for (final option in OccasionOption.values) {
+    if (option.apiValue == key) return option.label;
+  }
+  return raw;
 }
