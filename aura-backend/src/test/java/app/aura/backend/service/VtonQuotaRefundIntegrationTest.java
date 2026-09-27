@@ -148,4 +148,45 @@ class VtonQuotaRefundIntegrationTest {
         assertThat(userRepository.findById(user.getId()).orElseThrow().getDailyVtonCount()).isZero();
         server.verify();
     }
+
+    @Test
+    void completedEnvelopeWithEmptyOutputRefundsQuota() {
+        User user = new User("vton-empty-out", "vton-empty-out@aura.app");
+        user.addWardrobeItem(new WardrobeItem("coat", 0.9, PNG, "image/png", "black"));
+        user = userRepository.save(user);
+        Long itemId = user.getWardrobeItems().getFirst().getId();
+
+        when(vtonWorkerClient.enqueue(any())).thenReturn("rp-job-empty");
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl("https://api.runpod.ai/v2/endpoint-xyz");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(MockRestRequestMatchers.requestTo(
+                        "https://api.runpod.ai/v2/endpoint-xyz/status/rp-job-empty"))
+                .andRespond(MockRestResponseCreators.withSuccess(
+                        """
+                        {"status":"COMPLETED","output":{}}
+                        """,
+                        MediaType.APPLICATION_JSON));
+        VtonProperties properties = new VtonProperties(
+                false, false, "runpod", "https://api.runpod.ai/v2/endpoint-xyz", "k",
+                "/run", "/status/{id}", 10, 90, 30, 120, 30, false, 0L, 5);
+        RunPodVtonWorkerClient runPod = new RunPodVtonWorkerClient(builder.build(), properties, millis -> {});
+        when(vtonWorkerClient.status("rp-job-empty")).thenAnswer(invocation -> runPod.status("rp-job-empty"));
+
+        var created = vtonService.request(user.getId(), new VtonRequest(itemId, null, PNG, null));
+        var response = vtonService.status(created.jobId(), user.getId());
+
+        assertThat(response.status()).isEqualTo(VtonJobStatus.FAILED);
+        assertThat(response.errorMessage()).isEqualTo("Worker COMPLETED dondu ama gorsel icermiyor");
+        assertThat(response.resultImageUri()).isNull();
+
+        VtonJob job = vtonJobRepository.findById(created.jobId()).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(VtonJobStatus.FAILED);
+        assertThat(job.getResultImageUri()).isNull();
+        assertThat(job.getResultImageBase64()).isNull();
+        assertThat(job.isQuotaCharged()).isTrue();
+        assertThat(job.isQuotaRefunded()).isTrue();
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getDailyVtonCount()).isZero();
+        server.verify();
+    }
 }

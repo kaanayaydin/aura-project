@@ -311,11 +311,14 @@ public class VtonService {
         switch (raw) {
             case "QUEUED", "PENDING", "IN_QUEUE" -> job.markQueued(job.getWorkerJobId());
             case "PROCESSING", "STARTED", "IN_PROGRESS", "RUNNING" -> job.markProcessing();
-            case "COMPLETED", "SUCCESS" -> job.markCompleted(
-                    snapshot.resultImageUri() != null
-                            ? snapshot.resultImageUri()
-                            : "mock://catvton/result/" + job.getId(),
-                    snapshot.resultImageBase64());
+            case "COMPLETED", "SUCCESS" -> {
+                if (snapshot.resultImageUri() == null && snapshot.resultImageBase64() == null) {
+                    job.markFailed("Worker COMPLETED dondu ama gorsel icermiyor");
+                    refundQuota(job, job.getUser());
+                } else {
+                    job.markCompleted(snapshot.resultImageUri(), snapshot.resultImageBase64());
+                }
+            }
             case "FAILED", "FAILURE" -> {
                 job.markFailed(
                         snapshot.errorMessage() != null
