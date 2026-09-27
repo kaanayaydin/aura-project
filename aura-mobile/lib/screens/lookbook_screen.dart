@@ -4,7 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/theme.dart';
+import '../core/category_labels.dart';
+import '../core/color_labels.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/vton_lookbook_entry.dart';
 import '../providers/providers.dart';
 import '../services/api_service.dart';
@@ -19,17 +23,17 @@ class LookbookScreen extends ConsumerWidget {
     final lookbook = ref.watch(lookbookProvider);
 
     return RefreshIndicator(
-      color: AuraTheme.champagneGold,
-      backgroundColor: AuraTheme.carbonElevated,
+      color: AuraColors.primaryAction,
+      backgroundColor: AuraColors.surfaceElevated,
       onRefresh: () => ref.read(lookbookProvider.notifier).refresh(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        padding: const EdgeInsets.fromLTRB(28, 16, 28, 40),
         children: [
           lookbook.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
+              padding: EdgeInsets.symmetric(vertical: 56),
               child: Center(
-                child: CircularProgressIndicator(color: AuraTheme.champagneGold),
+                child: CircularProgressIndicator(color: AuraColors.primaryAction),
               ),
             ),
             error: (error, _) => _ErrorBox(message: _friendly(error)),
@@ -40,7 +44,7 @@ class LookbookScreen extends ConsumerWidget {
               return Column(
                 children: [
                   for (var i = 0; i < items.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 14),
+                    if (i > 0) const SizedBox(height: 18),
                     _LookbookCard(entry: items[i]),
                   ],
                 ],
@@ -54,7 +58,7 @@ class LookbookScreen extends ConsumerWidget {
 
   String _friendly(Object error) {
     if (error is ApiException) return error.message;
-    return 'Lookbook yuklenemedi. Backend 8080 portunda mi?';
+    return 'Lookbook yüklenemedi. Lütfen tekrar dene.';
   }
 }
 
@@ -65,31 +69,26 @@ class _EmptyLookbook extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 24),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AuraTheme.carbonSoft),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       child: Column(
         children: [
-          Icon(
+          const Icon(
             Icons.auto_stories_outlined,
             size: 40,
-            color: AuraTheme.champagneGold.withValues(alpha: 0.75),
+            color: AuraColors.primaryAction,
           ),
-          const SizedBox(height: 14),
-          Text(
-            'Lookbook bos',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          Text('Lookbook boş', style: AuraTypography.h3),
+          const SizedBox(height: 10),
           Text(
             'Sanal deneme sonucunu Lookbook\'a ekleyerek burada sakla.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                ),
+            style: AuraTypography.bodySecondary,
           ),
         ],
       ),
@@ -107,8 +106,10 @@ class _LookbookCard extends ConsumerWidget {
     final api = ref.read(apiServiceProvider);
     final bytes = _decode(entry.resultImageBase64);
     final title = [
-      if (entry.category != null && entry.category!.isNotEmpty) entry.category!,
-      if (entry.color != null && entry.color!.isNotEmpty) entry.color!,
+      if (entry.category != null && entry.category!.isNotEmpty)
+        categoryDisplayLabel(entry.category!),
+      if (entry.color != null && entry.color!.isNotEmpty)
+        colorDisplayLabel(entry.color!),
     ].join(' · ');
     final dateLabel = entry.createdAt == null
         ? ''
@@ -119,11 +120,9 @@ class _LookbookCard extends ConsumerWidget {
     return Container(
       key: Key('lookbook-card-${entry.jobId}'),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AuraTheme.champagneGold.withValues(alpha: 0.28),
-        ),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -138,35 +137,29 @@ class _LookbookCard extends ConsumerWidget {
                         api.absoluteVtonResultUrl(entry.resultImageUrl),
                         headers: api.vtonImageHeaders(entry.userId),
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: AuraTheme.carbonSoft,
+                        errorBuilder: (_, _, _) => Container(
+                          color: AuraColors.surface,
                           alignment: Alignment.center,
                           child: const Icon(
                             Icons.broken_image_outlined,
-                            color: AuraTheme.mistMuted,
+                            color: AuraColors.textSecondary,
                           ),
                         ),
                       )
-                    : Container(color: AuraTheme.carbonSoft)),
+                    : Container(color: AuraColors.surface)),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title.isEmpty ? 'Deneme #${entry.jobId}' : title,
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: AuraTypography.body.copyWith(fontWeight: FontWeight.w600),
                 ),
                 if (dateLabel.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    dateLabel,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AuraTheme.mistMuted,
-                          fontSize: 12,
-                        ),
-                  ),
+                  Text(dateLabel, style: AuraTypography.caption),
                 ],
               ],
             ),
@@ -194,13 +187,12 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AuraTheme.danger.withValues(alpha: 0.4)),
+        color: AuraColors.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
       ),
-      child: Text(message, style: TextStyle(color: AuraTheme.danger)),
+      child: Text(message, style: AuraTypography.body),
     );
   }
 }

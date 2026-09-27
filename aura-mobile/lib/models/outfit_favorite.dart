@@ -1,3 +1,5 @@
+import 'suggestion.dart';
+
 /// `GET /api/v1/aura/favorites` kayit modeli.
 class OutfitFavorite {
   const OutfitFavorite({
@@ -62,22 +64,13 @@ class OutfitFavorite {
     return DateTime.tryParse(raw);
   }
 
-  String get occasionLabel => switch (occasion) {
-        'meeting' => 'Toplanti',
-        'casual' => 'Gunluk',
-        'sport' => 'Spor',
-        _ => occasion,
-      };
+  String get occasionLabel => occasionDisplayLabel(occasion);
 
-  String get colorHarmonyLabel => switch (colorHarmonyType) {
-        'monochrome' => 'Monokrom',
-        'analogous' => 'Uyumlu ton',
-        'contrast' => 'Kontrast',
-        'neutral' => 'Notr',
-        null => '—',
-        '' => '—',
-        _ => colorHarmonyType!,
-      };
+  String get colorHarmonyLabel {
+    final raw = colorHarmonyType;
+    if (raw == null || raw.isEmpty) return '—';
+    return colorHarmonyDisplayLabel(raw);
+  }
 
   int get pieceCount =>
       [topItemId, bottomItemId, accessoryItemId].where((id) => id != null).length;

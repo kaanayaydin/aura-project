@@ -199,8 +199,8 @@ void main() {
       'createdAt': '2026-09-11T18:00:00Z',
     });
     expect(favorite.id, 12);
-    expect(favorite.occasionLabel, 'Gunluk');
-    expect(favorite.colorHarmonyLabel, 'Notr');
+    expect(favorite.occasionLabel, 'Günlük');
+    expect(favorite.colorHarmonyLabel, 'Nötr');
     expect(favorite.pieceCount, 2);
     expect(favorite.perfumeLabel, contains('Colonia'));
     expect(favorite.createdAt, isNotNull);

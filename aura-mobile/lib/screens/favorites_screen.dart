@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/theme.dart';
+import '../core/category_labels.dart';
+import '../core/color_labels.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/outfit_favorite.dart';
+import '../models/suggestion.dart';
 import '../models/wardrobe_item.dart';
 import '../providers/providers.dart';
 import '../services/api_service.dart';
@@ -36,29 +41,25 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AuraColors.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Aura', style: Theme.of(context).textTheme.displayMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Arşivin',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AuraTheme.mistMuted,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
+                  Text('Aura', style: AuraTypography.h3),
+                  const SizedBox(height: 6),
+                  Text('Arşivin', style: AuraTypography.caption),
+                  const SizedBox(height: 18),
                   TabBar(
                     controller: _tabs,
-                    labelColor: AuraTheme.champagneGold,
-                    unselectedLabelColor: AuraTheme.mistMuted,
-                    indicatorColor: AuraTheme.champagneGold,
+                    labelColor: AuraColors.primaryAction,
+                    unselectedLabelColor: AuraColors.textSecondary,
+                    indicatorColor: AuraColors.primaryAction,
                     tabs: const [
                       Tab(text: 'Favoriler'),
                       Tab(key: Key('lookbook-tab'), text: 'Lookbook'),
@@ -92,17 +93,17 @@ class _FavoritesTab extends ConsumerWidget {
     final wardrobe = ref.watch(wardrobeProvider).valueOrNull ?? const [];
 
     return RefreshIndicator(
-      color: AuraTheme.champagne,
-      backgroundColor: AuraTheme.carbonElevated,
+      color: AuraColors.primaryAction,
+      backgroundColor: AuraColors.surfaceElevated,
       onRefresh: () => ref.read(favoritesProvider.notifier).refresh(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: const EdgeInsets.fromLTRB(28, 22, 28, 40),
         children: [
           favorites.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
+              padding: EdgeInsets.symmetric(vertical: 56),
               child: Center(
-                child: CircularProgressIndicator(color: AuraTheme.champagne),
+                child: CircularProgressIndicator(color: AuraColors.primaryAction),
               ),
             ),
             error: (error, _) => _ErrorBox(message: _friendly(error)),
@@ -113,7 +114,7 @@ class _FavoritesTab extends ConsumerWidget {
               return Column(
                 children: [
                   for (var i = 0; i < items.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 14),
+                    if (i > 0) const SizedBox(height: 18),
                     _FavoriteCard(
                       favorite: items[i],
                       wardrobe: wardrobe,
@@ -148,7 +149,7 @@ class _FavoritesTab extends ConsumerWidget {
 
   String _friendly(Object error) {
     if (error is ApiException) return error.message;
-    return 'Favoriler yuklenemedi. Backend 8080 portunda mi?';
+    return 'Favoriler yüklenemedi. Lütfen tekrar dene.';
   }
 }
 
@@ -159,31 +160,26 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 24),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonElevated,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AuraTheme.carbonSoft),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       child: Column(
         children: [
-          Icon(
+          const Icon(
             Icons.favorite_border,
             size: 40,
-            color: AuraTheme.champagne.withValues(alpha: 0.7),
+            color: AuraColors.primaryAction,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          Text('Henüz favori yok', style: AuraTypography.h3),
+          const SizedBox(height: 10),
           Text(
-            'Henuz favori yok',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Oneri ekranindan bir kombin uretip “Kombini Favorilere Ekle” ile buraya kaydedebilirsin.',
+            'Öneri ekranından bir kombin üretip “Kombini favorilere ekle” ile buraya kaydedebilirsin.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                ),
+            style: AuraTypography.bodySecondary,
           ),
         ],
       ),
@@ -199,12 +195,12 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AuraTheme.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
+        color: AuraColors.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
       ),
-      child: Text(message),
+      child: Text(message, style: AuraTypography.body),
     );
   }
 }
@@ -240,15 +236,11 @@ class _FavoriteCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF252A30), Color(0xFF1A1D21)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AuraTheme.champagne.withValues(alpha: 0.22)),
+        color: AuraColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
+        boxShadow: AuraShadows.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,62 +251,58 @@ class _FavoriteCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   favorite.vibe.isEmpty ? 'Kombin' : favorite.vibe,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: AuraTheme.champagne,
-                        fontSize: 20,
-                      ),
+                  style: AuraTypography.h3,
                 ),
               ),
               IconButton(
-                tooltip: 'Favoriden cikar',
+                tooltip: 'Favoriden çıkar',
                 onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline, color: AuraTheme.danger),
+                icon: const Icon(Icons.delete_outline, color: AuraColors.error),
                 visualDensity: VisualDensity.compact,
               ),
             ],
           ),
           if (favorite.summary.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              favorite.summary,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AuraTheme.mistMuted,
-                  ),
-            ),
+            const SizedBox(height: 8),
+            Text(favorite.summary, style: AuraTypography.bodySecondary),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          _ScoreBadge(value: '$scorePct%'),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _Chip(label: 'Skor', value: '$scorePct%'),
-              _Chip(label: 'Ortam', value: favorite.occasionLabel),
+              _MetaChip(label: 'Ortam', value: favorite.occasionLabel),
               if (favorite.seasonBand != null && favorite.seasonBand!.isNotEmpty)
-                _Chip(label: 'Mevsim', value: favorite.seasonBand!),
-              _Chip(
+                _MetaChip(
+                  label: 'Mevsim',
+                  value: seasonDisplayLabel(favorite.seasonBand!),
+                ),
+              _MetaChip(
                 label: 'Renk',
                 value: harmonyPct == null
                     ? favorite.colorHarmonyLabel
                     : '${favorite.colorHarmonyLabel} · $harmonyPct%',
               ),
               if (favorite.temperatureCelsius != null)
-                _Chip(
-                  label: 'Sicaklik',
+                _MetaChip(
+                  label: 'Sıcaklık',
                   value: '${favorite.temperatureCelsius!.round()}°C',
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(
             children: [
-              _PieceThumb(label: 'Ust', item: top, fallbackId: favorite.topItemId),
-              const SizedBox(width: 10),
+              _PieceThumb(label: 'Üst', item: top, fallbackId: favorite.topItemId),
+              const SizedBox(width: 12),
               _PieceThumb(
                 label: 'Alt',
                 item: bottom,
                 fallbackId: favorite.bottomItemId,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               _PieceThumb(
                 label: 'Aksesuar',
                 item: accessory,
@@ -324,19 +312,13 @@ class _FavoriteCard extends StatelessWidget {
           ),
           if (favorite.perfumeLabel != null &&
               favorite.perfumeLabel!.isNotEmpty) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.spa_outlined, size: 16, color: AuraTheme.champagne),
+                const Icon(Icons.spa_outlined, size: 16, color: AuraColors.primaryAction),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    favorite.perfumeLabel!,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AuraTheme.mist,
-                          fontSize: 13,
-                        ),
-                  ),
+                  child: Text(favorite.perfumeLabel!, style: AuraTypography.body),
                 ),
               ],
             ),
@@ -347,8 +329,43 @@ class _FavoriteCard extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.value});
+class _ScoreBadge extends StatelessWidget {
+  const _ScoreBadge({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AuraColors.primaryAction,
+        borderRadius: BorderRadius.circular(AuraRadii.pillRadius),
+      ),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: 'Skor  ',
+              style: AuraTypography.caption.copyWith(color: AuraColors.surface),
+            ),
+            TextSpan(
+              text: value,
+              style: AuraTypography.body.copyWith(
+                color: AuraColors.surface,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -356,28 +373,20 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AuraTheme.carbonSoft.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(12),
+        color: AuraColors.surface,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
       ),
       child: Text.rich(
         TextSpan(
           children: [
-            TextSpan(
-              text: '$label  ',
-              style: const TextStyle(
-                color: AuraTheme.mistMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            TextSpan(text: '$label  ', style: AuraTypography.caption),
             TextSpan(
               text: value,
-              style: const TextStyle(
-                color: AuraTheme.mist,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+              style: AuraTypography.caption.copyWith(
+                color: AuraColors.textPrimary,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -401,47 +410,42 @@ class _PieceThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final missing = item == null && fallbackId == null;
+    final color = item?.color;
+    final caption = item == null
+        ? (fallbackId == null ? 'Yok' : '#$fallbackId')
+        : [
+            categoryDisplayLabel(item!.category),
+            if (color != null && color.isNotEmpty) colorDisplayLabel(color),
+          ].join(' · ');
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AuraTheme.mistMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 6),
+          Text(label, style: AuraTypography.caption),
+          const SizedBox(height: 8),
           AspectRatio(
             aspectRatio: 0.85,
             child: missing
                 ? Container(
                     decoration: BoxDecoration(
-                      color: AuraTheme.carbonSoft,
-                      borderRadius: BorderRadius.circular(14),
+                      color: AuraColors.surface,
+                      borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
-                      '—',
-                      style: TextStyle(color: AuraTheme.mistMuted),
-                    ),
+                    child: Text('—', style: AuraTypography.caption),
                   )
                 : AuraImage(
                     bytes: item?.decodedBytes,
-                    borderRadius: 14,
+                    imageUrl: item?.displayUrl,
+                    borderRadius: AuraRadii.cardRadius,
                   ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            item?.category ?? (fallbackId == null ? 'Yok' : '#$fallbackId'),
-            maxLines: 1,
+            caption,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 11,
-                  color: AuraTheme.mistMuted,
-                ),
+            style: AuraTypography.caption.copyWith(color: AuraColors.textPrimary),
           ),
         ],
       ),

@@ -141,13 +141,7 @@ class ColorHarmonyInfo {
     );
   }
 
-  String get typeLabel => switch (type) {
-        'monochrome' => 'Monokrom',
-        'analogous' => 'Uyumlu ton',
-        'contrast' => 'Kontrast',
-        'neutral' => 'Nötr',
-        _ => type,
-      };
+  String get typeLabel => colorHarmonyDisplayLabel(type);
 }
 
 class PerfumeRecommendation {
@@ -226,6 +220,17 @@ String seasonDisplayLabel(String raw) {
     'cool' => 'serin',
     'cold' => 'soğuk',
     _ => raw,
+  };
+}
+
+/// API renk uyumu tipi durur; ekranda Türkçe etiket basılır.
+String colorHarmonyDisplayLabel(String raw) {
+  return switch (raw.trim().toLowerCase()) {
+    'monochrome' => 'Monokrom',
+    'analogous' => 'Uyumlu ton',
+    'contrast' => 'Kontrast',
+    'neutral' => 'Nötr',
+    _ => raw.trim(),
   };
 }
 
