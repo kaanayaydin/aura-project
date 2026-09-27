@@ -612,7 +612,7 @@ class ChatNotifier extends Notifier<ChatState> {
     } catch (error) {
       final message = error is ApiException
           ? error.message
-          : 'Aura AI yanit uretemedi. Backend / Ollama ayakta mi?';
+          : 'Aura AI yanıt üretemedi. Bağlantıyı kontrol et.';
       state = state.copyWith(sending: false, error: message);
     }
   }

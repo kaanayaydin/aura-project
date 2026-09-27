@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
-import '../core/theme.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_shape.dart';
+import '../core/quiet_luxury/aura_typography.dart';
 import '../models/chat_message.dart';
 
-/// Sohbet baloncuğu — asistan yanitlarinda zarif Markdown.
+/// Sohbet baloncuğu — asistan yanıtlarında sade Markdown.
 class ChatBubble extends StatelessWidget {
   const ChatBubble({super.key, required this.message});
 
@@ -19,99 +21,92 @@ class ChatBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.sizeOf(context).width * 0.82,
         ),
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 16),
         padding: EdgeInsets.symmetric(
           horizontal: isUser ? 16 : 14,
           vertical: isUser ? 12 : 10,
         ),
         decoration: BoxDecoration(
-          color: isUser
-              ? AuraTheme.champagne.withValues(alpha: 0.92)
-              : AuraTheme.carbonElevated,
+          color: isUser ? AuraColors.primaryAction : AuraColors.surfaceElevated,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
             bottomLeft: Radius.circular(isUser ? 18 : 6),
             bottomRight: Radius.circular(isUser ? 6 : 18),
           ),
-          border: isUser ? null : Border.all(color: AuraTheme.carbonSoft),
+          boxShadow: AuraShadows.cardShadow,
         ),
         child: isUser
             ? Text(
                 message.content,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AuraTheme.carbon,
-                      height: 1.45,
-                    ),
+                style: AuraTypography.body.copyWith(
+                  color: AuraColors.surface,
+                  height: 1.45,
+                ),
               )
             : MarkdownBody(
                 data: message.content,
                 selectable: true,
-                styleSheet: _assistantSheet(context),
+                styleSheet: _assistantSheet(),
                 softLineBreak: true,
               ),
       ),
     );
   }
 
-  MarkdownStyleSheet _assistantSheet(BuildContext context) {
-    final base = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: AuraTheme.mist,
-          height: 1.5,
-          fontSize: 14,
-        );
+  MarkdownStyleSheet _assistantSheet() {
+    final base = AuraTypography.body.copyWith(
+      color: AuraColors.textPrimary,
+      height: 1.5,
+      fontSize: 14,
+    );
+    final emphasis = base.copyWith(
+      color: AuraColors.primaryAction,
+      fontWeight: FontWeight.w700,
+    );
     return MarkdownStyleSheet(
       p: base,
-      strong: base?.copyWith(
-        color: AuraTheme.champagne,
-        fontWeight: FontWeight.w700,
-      ),
-      em: base?.copyWith(
-        color: AuraTheme.mistMuted,
+      strong: emphasis,
+      em: base.copyWith(
+        color: AuraColors.textSecondary,
         fontStyle: FontStyle.italic,
       ),
-      listBullet: base?.copyWith(color: AuraTheme.champagne),
-      h1: base?.copyWith(
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
-        color: AuraTheme.champagne,
-      ),
-      h2: base?.copyWith(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: AuraTheme.champagne,
-      ),
-      h3: base?.copyWith(
+      listBullet: base.copyWith(color: AuraColors.primaryAction),
+      h1: emphasis.copyWith(fontSize: 18),
+      h2: emphasis.copyWith(fontSize: 16),
+      h3: base.copyWith(
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        color: AuraTheme.champagne,
+        color: AuraColors.primaryAction,
       ),
-      blockquote: base?.copyWith(color: AuraTheme.mistMuted),
+      blockquote: base.copyWith(color: AuraColors.textSecondary),
       blockquoteDecoration: BoxDecoration(
         border: Border(
           left: BorderSide(
-            color: AuraTheme.champagne.withValues(alpha: 0.45),
+            color: AuraColors.primaryAction.withValues(alpha: 0.45),
             width: 3,
           ),
         ),
       ),
       blockquotePadding: const EdgeInsets.only(left: 12),
-      code: base?.copyWith(
-        color: AuraTheme.champagneDeep,
-        backgroundColor: AuraTheme.carbonSoft,
+      code: base.copyWith(
+        color: AuraColors.textPrimary,
+        backgroundColor: AuraColors.background,
         fontSize: 13,
       ),
       codeblockDecoration: BoxDecoration(
-        color: AuraTheme.carbonSoft,
-        borderRadius: BorderRadius.circular(10),
+        color: AuraColors.background,
+        borderRadius: BorderRadius.circular(AuraRadii.cardRadius),
       ),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: AuraTheme.carbonSoft.withValues(alpha: 0.9)),
+          top: BorderSide(
+            color: AuraColors.textSecondary.withValues(alpha: 0.20),
+          ),
         ),
       ),
-      a: base?.copyWith(
-        color: AuraTheme.champagne,
+      a: base.copyWith(
+        color: AuraColors.primaryAction,
         decoration: TextDecoration.underline,
       ),
     );
