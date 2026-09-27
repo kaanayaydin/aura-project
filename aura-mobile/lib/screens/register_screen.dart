@@ -52,18 +52,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String _friendly(Object error) {
     if (error is ApiException) {
       if (error.statusCode == 409) {
-        return 'Bu email zaten kayitli.';
+        return 'Bu e-posta zaten kayıtlı.';
       }
       return error.message;
     }
-    return 'Kayit tamamlanamadi.';
+    return 'Kayıt tamamlanamadı.';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kayit ol'),
+        title: const Text('Kayıt ol'),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -85,12 +85,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Aura hesabi olustur',
+                        'Aura hesabı oluştur',
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Sifren en az 8 karakter; buyuk/kucuk harf, rakam ve ozel karakter icermelidir.',
+                        'Şifren en az 8 karakter; büyük/küçük harf, rakam ve özel karakter içermelidir.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: AuraTheme.mistMuted,
                             ),
@@ -114,14 +114,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         controller: _email,
                         keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
-                          labelText: 'Email',
+                          labelText: 'E-posta',
                           prefixIcon: Icon(Icons.mail_outline),
                         ),
                         validator: (value) {
                           final v = value?.trim() ?? '';
-                          if (v.isEmpty) return 'Email zorunlu';
+                          if (v.isEmpty) return 'E-posta zorunlu';
                           if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
-                            return 'Gecerli bir email girin';
+                            return 'Geçerli bir e-posta girin';
                           }
                           return null;
                         },
@@ -149,16 +149,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             return 'En az 8 karakter';
                           }
                           if (!RegExp(r'[A-Z]').hasMatch(v)) {
-                            return 'En az bir buyuk harf gerekli';
+                            return 'En az bir büyük harf gerekli';
                           }
                           if (!RegExp(r'[a-z]').hasMatch(v)) {
-                            return 'En az bir kucuk harf gerekli';
+                            return 'En az bir küçük harf gerekli';
                           }
                           if (!RegExp(r'\d').hasMatch(v)) {
                             return 'En az bir rakam gerekli';
                           }
                           if (!RegExp(r'[^A-Za-z0-9]').hasMatch(v)) {
-                            return 'En az bir ozel karakter gerekli';
+                            return 'En az bir özel karakter gerekli';
                           }
                           return null;
                         },
@@ -185,7 +185,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                     color: AuraTheme.carbon,
                                   ),
                                 )
-                              : const Text('Kayit Ol'),
+                              : const Text('Kayıt Ol'),
                         ),
                       ),
                     ],

@@ -59,7 +59,7 @@ class PerfumeRecommendationCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '${perfume.concentration}  ·  yayılım ${perfume.diffusion}',
+            '${perfume.concentration}  ·  yayılım ${diffusionDisplayLabel(perfume.diffusion)}',
             style: AuraTypography.caption,
           ),
           const SizedBox(height: 12),
@@ -98,7 +98,7 @@ class PerfumeRecommendationCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Termodinamik', style: AuraTypography.caption),
+                Text('Hava uyumu', style: AuraTypography.caption),
                 const SizedBox(height: 4),
                 Text(perfume.thermodynamicNote, style: AuraTypography.bodySecondary),
               ],

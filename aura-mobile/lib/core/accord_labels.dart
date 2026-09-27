@@ -16,3 +16,18 @@ String accordDisplayLabel(String accord) {
     _ => key,
   };
 }
+
+/// Yayılım değerini Türkçe görüntüleme etiketine çevirir.
+///
+/// Yalnızca ekranda kullanılır. API'deki `diffusion` değişmez.
+String diffusionDisplayLabel(String diffusion) {
+  final key = diffusion.trim().toLowerCase();
+  if (key.isEmpty) return diffusion;
+  return switch (key) {
+    'light' => 'hafif',
+    'soft' => 'yumuşak',
+    'moderate' => 'orta',
+    'strong' => 'güçlü',
+    _ => key,
+  };
+}

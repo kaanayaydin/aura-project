@@ -72,7 +72,7 @@ class AuthSessionNotifier extends Notifier<AuthSession?> {
     }
     if (!AuraConfig.useDemoAuth && userId == null && username == null) {
       if (current != null) return current;
-      throw ApiException(401, 'Oturum gerekli. Lutfen giris yapin.');
+      throw ApiException(401, 'Oturum gerekli. Lütfen giriş yapın.');
     }
     final token = await ref.read(apiServiceProvider).fetchAuthToken(
           userId: userId,

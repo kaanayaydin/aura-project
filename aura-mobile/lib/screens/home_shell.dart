@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
+import '../core/quiet_luxury/aura_colors.dart';
+import '../core/quiet_luxury/aura_typography.dart';
+import '../core/quiet_luxury/quiet_luxury_nav_icons.dart';
 import 'aura_chat_screen.dart';
 import 'favorites_screen.dart';
 import 'perfume_shelf_screen.dart';
@@ -27,42 +29,79 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final navTheme = NavigationBarThemeData(
+      backgroundColor: AuraColors.surfaceElevated,
+      indicatorColor: AuraColors.primaryAction.withValues(alpha: 0.16),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return AuraTypography.caption.copyWith(
+          fontWeight: FontWeight.w600,
+          color: selected ? AuraColors.primaryAction : AuraColors.textSecondary,
+        );
+      }),
+      iconTheme: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return IconThemeData(
+          color: selected ? AuraColors.primaryAction : AuraColors.textSecondary,
+        );
+      }),
+    );
+
     return Scaffold(
       body: IndexedStack(
         index: _index,
         children: _pages,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.checkroom_outlined),
-            selectedIcon: Icon(Icons.checkroom, color: AuraTheme.champagne),
-            label: 'Dolap',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome, color: AuraTheme.champagne),
-            label: 'Oneri',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.psychology_outlined),
-            selectedIcon: Icon(Icons.psychology, color: AuraTheme.champagne),
-            label: 'Aura AI',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite_border),
-            selectedIcon: Icon(Icons.favorite, color: AuraTheme.champagne),
-            label: 'Arşiv',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.spa_outlined),
-            selectedIcon: Icon(Icons.spa, color: AuraTheme.champagne),
-            label: 'Raf',
-          ),
-        ],
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(navigationBarTheme: navTheme),
+        child: NavigationBar(
+          selectedIndex: _index,
+          surfaceTintColor: Colors.transparent,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          onDestinationSelected: (value) => setState(() => _index = value),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(QuietLuxuryNavIcons.dolap),
+              selectedIcon: Icon(
+                QuietLuxuryNavIcons.dolap,
+                color: AuraColors.primaryAction,
+              ),
+              label: 'Dolap',
+            ),
+            NavigationDestination(
+              icon: Icon(QuietLuxuryNavIcons.oneri),
+              selectedIcon: Icon(
+                QuietLuxuryNavIcons.oneri,
+                color: AuraColors.primaryAction,
+              ),
+              label: 'Öneri',
+            ),
+            NavigationDestination(
+              icon: Icon(QuietLuxuryNavIcons.auraAi),
+              selectedIcon: Icon(
+                QuietLuxuryNavIcons.auraAi,
+                color: AuraColors.primaryAction,
+              ),
+              label: 'Aura AI',
+            ),
+            NavigationDestination(
+              icon: Icon(QuietLuxuryNavIcons.arsiv),
+              selectedIcon: Icon(
+                QuietLuxuryNavIcons.arsiv,
+                color: AuraColors.primaryAction,
+              ),
+              label: 'Arşiv',
+            ),
+            NavigationDestination(
+              icon: Icon(QuietLuxuryNavIcons.raf),
+              selectedIcon: Icon(
+                QuietLuxuryNavIcons.raf,
+                color: AuraColors.primaryAction,
+              ),
+              label: 'Raf',
+            ),
+          ],
+        ),
       ),
     );
   }

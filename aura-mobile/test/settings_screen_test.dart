@@ -95,7 +95,7 @@ void main() {
     expect(container.read(authSessionProvider), isNull);
     expect(await store.read(), isNull);
     expect(logoutCalls, 1);
-    expect(find.text('Giris Yap'), findsOneWidget);
+    expect(find.text('Giriş Yap'), findsOneWidget);
     expect(find.text('Ayarlar'), findsNothing);
   });
 }

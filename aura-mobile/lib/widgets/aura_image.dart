@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
+import '../core/quiet_luxury/aura_colors.dart';
 
 /// Object storage URL veya bellek baytlari ile kiyafet gorseli.
 class AuraImage extends StatelessWidget {
@@ -65,18 +65,18 @@ class AuraImage extends StatelessWidget {
   }
 
   Widget _placeholder() => Container(
-        color: AuraTheme.carbonSoft,
+        color: AuraColors.surface,
         alignment: Alignment.center,
         child: const Icon(
           Icons.checkroom_outlined,
-          color: AuraTheme.mistMuted,
+          color: AuraColors.textSecondary,
           size: 36,
         ),
       );
 
   Widget _broken() => Container(
-        color: AuraTheme.carbonSoft,
+        color: AuraColors.surface,
         alignment: Alignment.center,
-        child: const Icon(Icons.broken_image_outlined, color: AuraTheme.mistMuted),
+        child: const Icon(Icons.broken_image_outlined, color: AuraColors.textSecondary),
       );
 }

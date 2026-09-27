@@ -169,7 +169,7 @@ class ApiService {
           body: jsonEncode({'email': email, 'password': password}),
         )
         .timeout(_timeout);
-    _ensureOk(response, 'Kayit basarisiz');
+    _ensureOk(response, 'Kayıt başarısız');
   }
 
   Future<AuthSession> login({
@@ -184,7 +184,7 @@ class ApiService {
           body: jsonEncode({'email': email, 'password': password}),
         )
         .timeout(_timeout);
-    _ensureOk(response, 'Giris basarisiz');
+    _ensureOk(response, 'Giriş başarısız');
     return AuthSession.fromSessionJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -214,7 +214,7 @@ class ApiService {
     final uri = Uri.parse('$backendBaseUrl/api/v1/wardrobe/items')
         .replace(queryParameters: query);
     final response = await _authGet(uri);
-    _ensureOk(response, 'Dolap listesi alinamadi');
+    _ensureOk(response, 'Dolap listesi alınamadı');
     final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return list
         .whereType<Map<String, dynamic>>()
@@ -243,7 +243,7 @@ class ApiService {
       'longitude': ?longitude,
     };
     final response = await _authPost(uri, body: jsonEncode(body));
-    _ensureOk(response, 'Oneri alinamadi');
+    _ensureOk(response, 'Öneri alınamadı');
     return SuggestionResponse.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -257,7 +257,7 @@ class ApiService {
     final uri = Uri.parse('$backendBaseUrl/api/v1/weather/current')
         .replace(queryParameters: query.isEmpty ? null : query);
     final response = await _client.get(uri).timeout(_timeout);
-    _ensureOk(response, 'Hava durumu alinamadi');
+    _ensureOk(response, 'Hava durumu alınamadı');
     return WeatherSnapshot.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -338,7 +338,7 @@ class ApiService {
       'filename': ?filename,
     };
     final response = await _authPost(uri, body: jsonEncode(body));
-    _ensureOk(response, 'Upload URL alinamadi');
+    _ensureOk(response, 'Yükleme bağlantısı alınamadı');
     final json =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
     return (
@@ -363,7 +363,7 @@ class ApiService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
         response.statusCode,
-        'Object upload basarisiz (${response.statusCode})',
+        'Görsel yüklenemedi (${response.statusCode})',
       );
     }
   }
@@ -412,7 +412,7 @@ class ApiService {
       'alreadyNormalized': alreadyNormalized,
     };
     final response = await _authPost(uri, body: jsonEncode(body));
-    _ensureOk(response, 'Dolaba yazma basarisiz');
+    _ensureOk(response, 'Dolaba yazılamadı');
     return WardrobeItem.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -486,7 +486,7 @@ class ApiService {
   Future<List<OutfitFavorite>> fetchFavorites({int? userId}) async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/aura/favorites');
     final response = await _authGet(uri);
-    _ensureOk(response, 'Favoriler alinamadi');
+    _ensureOk(response, 'Favoriler alınamadı');
     final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return list
         .whereType<Map<String, dynamic>>()
@@ -519,7 +519,7 @@ class ApiService {
       body: jsonEncode(body),
       timeout: const Duration(seconds: 120),
     );
-    _ensureOk(response, 'Aura AI yanit uretemedi');
+    _ensureOk(response, 'Aura AI yanıt üretemedi');
     return ChatResponse.fromJson(
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
@@ -557,7 +557,7 @@ class ApiService {
   Future<List<VtonLookbookEntry>> fetchLookbook({int? userId}) async {
     final uri = Uri.parse('$backendBaseUrl/api/v1/aura/vton/lookbook');
     final response = await _authGet(uri);
-    _ensureOk(response, 'Lookbook yuklenemedi');
+    _ensureOk(response, 'Lookbook yüklenemedi');
     final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
     return list
         .map((e) => VtonLookbookEntry.fromJson(e as Map<String, dynamic>))

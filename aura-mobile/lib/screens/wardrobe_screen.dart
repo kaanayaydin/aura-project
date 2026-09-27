@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/category_labels.dart';
+import '../core/color_labels.dart';
 import '../core/quiet_luxury/aura_colors.dart';
 import '../core/quiet_luxury/aura_shape.dart';
 import '../core/quiet_luxury/aura_typography.dart';
@@ -113,6 +114,7 @@ class _WardrobeScreenState extends ConsumerState<WardrobeScreen> {
                           label: 'Renk',
                           options: colors,
                           selected: _colorFilter,
+                          display: colorDisplayLabel,
                           onSelected: (value) => setState(() => _colorFilter = value),
                         ),
                       Expanded(

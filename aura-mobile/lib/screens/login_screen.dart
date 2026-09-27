@@ -47,17 +47,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _friendly(Object error) {
     if (error is ApiException) {
       if (error.statusCode == 423) {
-        return 'Hesabiniz gecici olarak kilitlendi. Biraz sonra tekrar deneyin.';
+        return 'Hesabınız geçici olarak kilitlendi. Biraz sonra tekrar deneyin.';
       }
       if (error.statusCode == 401) {
-        return 'Email veya sifre hatali.';
+        return 'E-posta veya parola hatalı.';
       }
       if (error.statusCode == 429) {
-        return 'Cok fazla deneme. Lutfen bir dakika bekleyin.';
+        return 'Çok fazla deneme. Lütfen bir dakika bekleyin.';
       }
       return error.message;
     }
-    return 'Giris yapilamadi. Backend ayakta mi?';
+    return 'Giriş yapılamadı. Lütfen tekrar dene.';
   }
 
   @override
@@ -92,7 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Kisisel imaj orkestratoru',
+                        'Kişisel imaj orkestratörü',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: AuraTheme.mistMuted,
@@ -100,7 +100,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 40),
                       Text(
-                        'Giris yap',
+                        'Giriş yap',
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 20),
@@ -109,14 +109,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         decoration: const InputDecoration(
-                          labelText: 'Email',
+                          labelText: 'E-posta',
                           prefixIcon: Icon(Icons.mail_outline),
                         ),
                         validator: (value) {
                           final v = value?.trim() ?? '';
-                          if (v.isEmpty) return 'Email zorunlu';
+                          if (v.isEmpty) return 'E-posta zorunlu';
                           if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
-                            return 'Gecerli bir email girin';
+                            return 'Geçerli bir e-posta girin';
                           }
                           return null;
                         },
@@ -181,7 +181,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: AuraTheme.carbon,
                                   ),
                                 )
-                              : const Text('Giris Yap'),
+                              : const Text('Giriş Yap'),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -196,7 +196,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 );
                               },
                         child: Text(
-                          'Hesabin yok mu? Kayit ol',
+                          'Hesabın yok mu? Kayıt ol',
                           style: TextStyle(color: AuraTheme.champagneGold),
                         ),
                       ),

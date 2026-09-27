@@ -164,7 +164,7 @@ class _WardrobeItemDetailScreenState
           _pollTimer?.cancel();
           _pollTimer = null;
           if (job.status == 'FAILED') {
-            _error = job.errorMessage ?? 'VTON basarisiz.';
+            _error = job.errorMessage ?? 'Sanal deneme başarısız oldu.';
           }
         }
       });
@@ -212,8 +212,8 @@ class _WardrobeItemDetailScreenState
     return switch (status) {
       'QUEUED' => 'Kuyrukta bekleniyor...',
       'PROCESSING' => 'Silüet hazırlanıyor...',
-      'COMPLETED' => 'Deneme hazir.',
-      'FAILED' => 'Islem basarisiz.',
+      'COMPLETED' => 'Deneme hazır.',
+      'FAILED' => 'İşlem başarısız oldu.',
       _ => 'Silüet hazırlanıyor...',
     };
   }

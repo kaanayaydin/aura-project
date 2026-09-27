@@ -114,7 +114,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Sonuç'), findsOneWidget);
-    expect(find.textContaining('hazir'), findsOneWidget);
+    expect(find.textContaining('hazır'), findsOneWidget);
     expect(find.byKey(const Key('lookbook-save')), findsOneWidget);
     expect(find.text("Lookbook'a Ekle"), findsOneWidget);
 

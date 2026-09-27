@@ -40,7 +40,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Aura'), findsWidgets);
     expect(find.text('Dolap'), findsOneWidget);
-    expect(find.text('Oneri'), findsOneWidget);
+    expect(find.text('Öneri'), findsOneWidget);
     expect(find.text('Aura AI'), findsOneWidget);
     expect(find.text('Arşiv'), findsOneWidget);
     expect(find.text('Raf'), findsOneWidget);
@@ -56,8 +56,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Giris yap'), findsOneWidget);
-    expect(find.text('Giris Yap'), findsOneWidget);
+    expect(find.text('Giriş yap'), findsOneWidget);
+    expect(find.text('Giriş Yap'), findsOneWidget);
   });
 }
 
