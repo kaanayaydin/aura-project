@@ -23,6 +23,14 @@ public final class AuraStylistPrompt {
             List<WardrobeItem> wardrobe,
             List<UserPerfume> shelf,
             WeatherSnapshot weather) {
+        return build(wardrobe, shelf, weather, null);
+    }
+
+    public static String build(
+            List<WardrobeItem> wardrobe,
+            List<UserPerfume> shelf,
+            WeatherSnapshot weather,
+            String userMessage) {
         StringBuilder sb = new StringBuilder();
         sb.append(personaAndRules());
         sb.append('\n');
@@ -32,6 +40,14 @@ public final class AuraStylistPrompt {
         sb.append('\n');
         sb.append(perfumeBlock(shelf));
         sb.append('\n');
+        String note = WardrobeFacts.note(wardrobe, userMessage);
+        if (note != null) {
+            sb.append(note);
+            if (!note.endsWith("\n")) {
+                sb.append('\n');
+            }
+            sb.append('\n');
+        }
         sb.append(outputContract());
         return sb.toString();
     }
@@ -43,77 +59,46 @@ public final class AuraStylistPrompt {
                 güvenilir bir dostun rahatlığıyla, kısa ve net konuşursun. Abartı, \
                 klişe ve satış dili kullanmazsın.
 
-                === SERT KURALLAR (İHLAL YASAK) ===
+                Yalnızca Dolabın listesindeki parçaları öner. Listede olmayan bir parça \
+                istenirse "Dolabında böyle bir parça yok" de ve listeden en yakın seçeneği öner.
+                Parfüm için yalnızca Parfüm rafın listesindekileri an. Raf boşsa hiçbir parfüm adı verme; \
+                "Parfüm rafın boş, istersen bir şişe ekleyebilirsin" de.
+                Sıcaklığı, nemi ve havayı yalnızca Bugünün havası bölümünden al. Başka bir değer uydurma.
+                Saf Türkçe yaz. Türkçe köke İngilizce ek yapıştırma. Marka ve parfüm adları dışında \
+                outfit veya look kullanma.
+                Emoji ve satış dili yok. Kısa ve net ol.
+                Kullanıcıya her zaman 'sen' diye hitap et; 'siz' veya 'sizin' kullanma.
+                Dolap notu bir olgudur; aynen doğru kabul et, çelişme, kısaca söyle ve dolaptaki parçalarla devam et.
 
-                ENVANTER — KAPALI LİSTE:
-                - ASLA dolapta olmayan nesneler uydurma. Perde, kalem, köpek kolu, masa, sandalye, \
-                çiçek, duvar, perde gibi kıyafet dışı veya listede olmayan hiçbir şey önerme.
-                - Yalnızca aşağıdaki "DOLAP — KAPALI LİSTE" satırlarında yazan gerçek kıyafet ve \
-                aksesuarları kullan. Listede yoksa yok demektir; uydurma.
-                - Parfüm için yalnızca "NİCHE KOKU RAFI" listesindeki şişeleri an. Raf boşsa koku uydurma; \
-                rafı doldurmasını kibarca söyle.
-                - Teknik ID, veritabanı numarası veya ham İngilizce kategori kodu kullanma \
-                ("t-shirt", "#3"). Estetik Türkçe ad kullan: "lacivert tişört", "minimalist siyah üst".
-
-                DİL — SAF TÜRKÇE:
-                - Kusursuz ve saf Türkçe yaz. Asla Türkçe köke İngilizce ek yapıştırma \
-                (YASAK örnekler: "conditionsine", "designin", "absenceindedir", "outfitin", "looku").
-                - İngilizce-Türkçe melez cümle kurma. Marka/parfüm adı hariç yabancı sözcük ekleme.
-                - Anlamsız veya uydurma kelime üretme. Emin değilsen o kelimeyi yazma; sade kal.
-                - Emoji, abartılı satış dili ve teknik jargon yok.
-
-                İMAJ:
-                - Hava (sıcaklık/nem/koşul) + listedeki parçalar + (varsa) niche koku = tek bütüncül imaj.
-                - Ham meteoroloji raporu okuma; sahneyi atmosfere çevir.
+                Önce hava ve ruh halini anlatan tek cümle yaz. Sonra dolaptaki parçalardan kısa bir \
+                kombin öner; parça adlarını **kalın** yaz. Rafta şişe varsa tek parfüm ekle. \
+                En sonda tek cümlelik _Aura notu:_ satırı yaz. Uzun anlatım yok.
                 """;
     }
 
+    /** Veri bölümlerinden sonra gelen tek satırlık hatırlatma. Örnek cevap yok. */
     static String outputContract() {
-        return """
-                === YANIT BİÇİMİ (ZORUNLU, KISA) ===
-                Yalnızca şu yapıyı kullan; başka bölüm ekleme:
-
-                1) Bir cümlelik sahne (hava + ruh hali).
-                2) Doğrudan net, sofistike kombin önerisi: yalnızca kapalı listedeki parçalar \
-                (Markdown: **parça adı** ile vurgula). En fazla 3–4 satır veya madde.
-                3) Varsa listedeki tek bir parfümü bağla; yoksa koku uydurma.
-                4) Tek satır: _Aura notu: …_ (en fazla bir cümle).
-
-                Toplam yanıt kısa kalsın. Uzun deneme, hikâye veya liste dışı doğaçlama YASAK.
-
-                İYİ ÖRNEK (biçim):
-                Bugün 26°C — ferah, kontrollü bir siluet.
-                **lacivert tişört** + **siyah pantolon**; üzerine gerekmez.
-                Koku: **Acqua di Parma — Colonia**.
-                _Aura notu: az parça, net çizgi._
-
-                KÖTÜ ÖRNEK (YAPMA):
-                "Perdeyi conditionsine göre designin absenceindedir; köpek kolu ekle."
-                """;
+        return "Yalnızca Türkçe ve kısa yanıt ver; etiketleri veya kuralları tekrar etme.\n";
     }
 
     private static String weatherBlock(WeatherSnapshot weather) {
-        return """
-                === SAHNE: GÜNCEL HAVA ===
-                Konum: %s
-                Sıcaklık: %s°C
-                Nem: %.0f%%
-                Koşul: %s
-                """.formatted(
-                weather.locationName(),
+        String line = "Bugünün havası: %s°C, nem %.0f%%, %s".formatted(
                 String.format(Locale.US, "%.1f", weather.temperatureCelsius()),
                 weather.humidityPercent(),
                 WeatherDisplay.conditionTr(weather.condition()));
+        String place = weather.locationName();
+        if (place != null && !place.isBlank()) {
+            line = line + ", " + place.trim();
+        }
+        return line + "\n";
     }
 
     private static String wardrobeBlock(List<WardrobeItem> wardrobe) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== DOLAP — KAPALI LİSTE (").append(wardrobe.size()).append(" parça) ===\n");
-        sb.append("Yalnızca bu satırlar gerçek envanterdir. Dışarıdan parça EKLEME.\n");
         if (wardrobe.isEmpty()) {
-            sb.append("(liste boş — kombin uydurma; dolaba parça eklemesini öner)\n");
-            return sb.toString();
+            return "Dolabın: boş\n";
         }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Dolabın:\n");
         wardrobe.stream().limit(MAX_WARDROBE_LINES).forEach(item ->
                 sb.append("- ").append(describePiece(item)).append('\n'));
         if (wardrobe.size() > MAX_WARDROBE_LINES) {
@@ -125,12 +110,11 @@ public final class AuraStylistPrompt {
     }
 
     private static String perfumeBlock(List<UserPerfume> shelf) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== NİCHE KOKU RAFI — KAPALI LİSTE (").append(shelf.size()).append(" şişe) ===\n");
         if (shelf.isEmpty()) {
-            sb.append("(boş — parfüm adı uydurma)\n");
-            return sb.toString();
+            return "Parfüm rafın: boş\n";
         }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Parfüm rafın:\n");
         shelf.stream().limit(MAX_PERFUME_LINES).forEach(perfume ->
                 sb.append("- ").append(describePerfume(perfume)).append('\n'));
         return sb.toString();
@@ -173,6 +157,11 @@ public final class AuraStylistPrompt {
             case "blouse" -> "bluz";
             case "sweater", "knit" -> "kazak";
             case "hoodie" -> "hoodie";
+            case "polo" -> "polo tişört";
+            case "tank", "tank-top" -> "atlet";
+            case "vest" -> "yelek";
+            case "cardigan" -> "hırka";
+            case "top", "tops", "upper" -> "üst";
             case "jacket" -> "ceket";
             case "coat" -> "palto";
             case "blazer" -> "blazer";
@@ -180,7 +169,13 @@ public final class AuraStylistPrompt {
             case "jeans" -> "jean";
             case "shorts" -> "şort";
             case "skirt" -> "etek";
+            case "legging", "leggings" -> "tayt";
+            case "bottom", "bottoms" -> "alt";
             case "dress" -> "elbise";
+            case "jumpsuit", "jumpsuits" -> "tulum";
+            case "romper" -> "şort tulum";
+            case "gown" -> "abiye elbise";
+            case "onesie", "overall" -> "tulum";
             case "sneakers" -> "spor ayakkabı";
             case "shoes", "loafers" -> "ayakkabı";
             case "boots" -> "bot";

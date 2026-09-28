@@ -108,7 +108,8 @@ public class AuraChatService {
                 userPerfumeRepository.findByUserIdOrderByBrandAscNameAsc(authenticatedUserId);
         WeatherSnapshot weather = weatherService.current(request.latitude(), request.longitude());
 
-        String systemPrompt = AuraStylistPrompt.build(wardrobe, shelf, weather);
+        String systemPrompt = AuraStylistPrompt.build(
+                wardrobe, shelf, weather, request.message());
         String weatherSummary = WeatherDisplay.summary(weather);
 
         try {

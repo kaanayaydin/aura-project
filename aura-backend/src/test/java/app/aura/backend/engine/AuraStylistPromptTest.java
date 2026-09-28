@@ -37,28 +37,71 @@ class AuraStylistPromptTest {
 
         assertThat(prompt).containsIgnoringCase("kişisel stilistisin");
         assertThat(prompt).doesNotContainIgnoringCase("karbon ve şampanya");
-        assertThat(prompt).contains("ASLA dolapta olmayan nesneler uydurma");
-        assertThat(prompt).contains("Perde");
+        assertThat(prompt).contains("Dolabında böyle bir parça yok");
         assertThat(prompt).containsIgnoringCase("saf Türkçe");
-        assertThat(prompt).contains("conditionsine");
-        assertThat(prompt).contains("KAPALI LİSTE");
-        assertThat(prompt).contains("YANIT BİÇİMİ");
+        assertThat(prompt).contains("Bugünün havası:");
+        assertThat(prompt).contains("Dolabın:");
+        assertThat(prompt).contains("Parfüm rafın:");
         assertThat(prompt).contains("_Aura notu:");
-        assertThat(prompt).contains("Koşul: Açık");
+        assertThat(prompt).contains("26.0°C");
+        assertThat(prompt).contains("Açık");
         assertThat(prompt).contains("- gri gömlek");
         assertThat(prompt).contains("Acqua di Parma — Colonia");
         assertThat(prompt).doesNotContain("- #");
+        assertThat(prompt).doesNotContain("İYİ ÖRNEK");
+        assertThat(prompt).doesNotContain("KÖTÜ ÖRNEK");
+        assertThat(prompt).doesNotContain("KAPALI LİSTE");
+        assertThat(prompt).doesNotContain("NİCHE KOKU RAFI");
+        assertThat(prompt).doesNotContain("conditionsine");
+        assertThat(prompt).doesNotContain("1)");
     }
 
     @Test
     void personaForbidsHybridEnglishTurkishAndInventedObjects() {
         String rules = AuraStylistPrompt.personaAndRules() + AuraStylistPrompt.outputContract();
-        assertThat(rules).contains("köpek kolu");
-        assertThat(rules).contains("absenceindedir");
-        assertThat(rules).contains("Doğrudan net, sofistike kombin önerisi");
-        assertThat(rules).contains("lacivert tişört");
+        assertThat(rules).contains("Dolabında böyle bir parça yok");
+        assertThat(rules).contains("Parfüm rafın boş, istersen bir şişe ekleyebilirsin");
+        assertThat(rules).containsIgnoringCase("saf Türkçe");
         assertThat(rules).doesNotContain("navy tişört");
-        assertThat(rules).contains("KÖTÜ ÖRNEK");
+        assertThat(rules).doesNotContain("KÖTÜ ÖRNEK");
+        assertThat(rules).doesNotContain("İYİ ÖRNEK");
+        assertThat(rules).doesNotContain("conditionsine");
+        assertThat(rules).doesNotContain("1)");
+        assertThat(AuraStylistPrompt.personaAndRules()).contains("her zaman 'sen' diye hitap et");
+        assertThat(AuraStylistPrompt.personaAndRules()).contains("'siz' veya 'sizin' kullanma");
+        assertThat(AuraStylistPrompt.personaAndRules()).doesNotContain("madde numaralarını");
+        assertThat(AuraStylistPrompt.personaAndRules()).doesNotContain("tekrar etme");
+        assertThat(rules).contains("etiketleri veya kuralları tekrar etme");
+    }
+
+    @Test
+    void emptyShelfPromptHasNoCopiedExample() {
+        WeatherSnapshot weather = new WeatherSnapshot(
+                20.0, 60, "Partly cloudy", 2, 41.0, 29.0, "Istanbul", "open-meteo");
+        List<WardrobeItem> wardrobe = List.of(
+                new WardrobeItem("t-shirt", 0.9, "aGVsbG8=", "image/png", "navy"),
+                new WardrobeItem("shirt", 0.9, "aGVsbG8=", "image/png", "black"),
+                new WardrobeItem("pants", 0.9, "aGVsbG8=", "image/png", "black"));
+
+        String prompt = AuraStylistPrompt.build(wardrobe, List.of(), weather);
+
+        assertThat(prompt).doesNotContain("26°C");
+        assertThat(prompt).doesNotContain("Acqua di Parma");
+        assertThat(prompt).doesNotContain("İYİ ÖRNEK");
+        assertThat(prompt).doesNotContain("KÖTÜ ÖRNEK");
+        assertThat(prompt).doesNotContain("KAPALI LİSTE");
+        assertThat(prompt).doesNotContain("NİCHE KOKU RAFI");
+        assertThat(prompt).doesNotContain("conditionsine");
+        assertThat(prompt).doesNotContain("1)");
+        assertThat(prompt).contains("Parfüm rafın: boş");
+        assertThat(prompt).contains("Dolabın:");
+        assertThat(prompt).contains("Bugünün havası:");
+        assertThat(prompt).contains("20.0°C");
+        assertThat(prompt).contains("- lacivert tişört");
+        assertThat(prompt).contains("- siyah gömlek");
+        assertThat(prompt).contains("- siyah pantolon");
+        assertThat(prompt).endsWith(
+                "Yalnızca Türkçe ve kısa yanıt ver; etiketleri veya kuralları tekrar etme.\n");
     }
 
     @Test
@@ -110,19 +153,22 @@ class AuraStylistPromptTest {
 
         for (String prompt : List.of(city, empty, coords)) {
             assertThat(prompt).contains("kişisel stilistisin");
-            assertThat(prompt).contains("KAPALI LİSTE");
-            assertThat(prompt).contains("YANIT BİÇİMİ");
+            assertThat(prompt).contains("Dolabın:");
+            assertThat(prompt).contains("Bugünün havası:");
             assertThat(prompt).contains("_Aura notu:");
             assertThat(prompt).doesNotContainIgnoringCase("karbon ve şampanya");
             assertThat(prompt).doesNotContain("open-meteo");
             assertThat(prompt).doesNotContain("simulated");
             assertThat(prompt).doesNotContain("navy");
+            assertThat(prompt).doesNotContain("KAPALI LİSTE");
+            assertThat(prompt).doesNotContain("İYİ ÖRNEK");
         }
         assertThat(city).contains("- lacivert tişört");
-        assertThat(city).contains("Koşul: Açık");
-        assertThat(empty).contains("liste boş");
-        assertThat(empty).contains("Koşul: Yağmurlu");
+        assertThat(city).contains("Açık");
+        assertThat(empty).contains("Dolabın: boş");
+        assertThat(empty).contains("Parfüm rafın: boş");
+        assertThat(empty).contains("Yağmurlu");
         assertThat(coords).contains("- siyah palto");
-        assertThat(coords).contains("Koşul: Karlı");
+        assertThat(coords).contains("Karlı");
     }
 }
