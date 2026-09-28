@@ -53,6 +53,10 @@ class AuraChatControllerTest {
         return "Bearer " + jwtService.issueToken(user.getId(), user.getUsername());
     }
 
+    private static int occurrences(String text, String token) {
+        return text.split(Pattern.quote(token), -1).length - 1;
+    }
+
     @Test
     void unauthenticatedChatReturns401() throws Exception {
         mockMvc.perform(post("/api/v1/aura/chat")
@@ -137,8 +141,12 @@ class AuraChatControllerTest {
                 .doesNotContain("yalnızca dolap listesinden")
                 .doesNotContain("Parfüm önermiyorum")
                 .doesNotContainPattern("(?iu)(?<!\\p{L})siz(in)?(?!\\p{L})")
-                .contains("Kombin önerim: **gömlek** + **pantolon**.");
-        assertThat(reply.split(Pattern.quote("**gömlek**"), -1)).hasSize(2);
+                .contains("Kombin önerim:")
+                .contains("**pantolon**.");
+        // Üst parça mevsime göre gömlek ya da tişört olur; ikisi birden ve tekrar yok.
+        int tops = occurrences(reply, "**gömlek**") + occurrences(reply, "**tişört**");
+        assertThat(tops).isEqualTo(1);
+        assertThat(occurrences(reply, "**pantolon**")).isEqualTo(1);
         assertThat(reply.split(Pattern.quote(WardrobeGuardrail.EMPTY_SHELF_LINE), -1)).hasSize(2);
     }
 

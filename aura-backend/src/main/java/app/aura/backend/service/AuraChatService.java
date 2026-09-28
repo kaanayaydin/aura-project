@@ -6,6 +6,8 @@ import app.aura.backend.dto.ChatAuraResponse;
 import app.aura.backend.dto.ChatTurn;
 import app.aura.backend.dto.WeatherSnapshot;
 import app.aura.backend.engine.AuraStylistPrompt;
+import app.aura.backend.engine.Occasion;
+import app.aura.backend.engine.OutfitRuleEngine;
 import app.aura.backend.engine.WardrobeGuardrail;
 import app.aura.backend.engine.WeatherDisplay;
 import app.aura.backend.model.UserPerfume;
@@ -73,6 +75,7 @@ public class AuraChatService {
     private final UserPerfumeRepository userPerfumeRepository;
     private final UserRepository userRepository;
     private final WeatherService weatherService;
+    private final OutfitRuleEngine outfitEngine;
     private final RestClient ollamaClient;
 
     public AuraChatService(
@@ -86,6 +89,7 @@ public class AuraChatService {
         this.userPerfumeRepository = userPerfumeRepository;
         this.userRepository = userRepository;
         this.weatherService = weatherService;
+        this.outfitEngine = new OutfitRuleEngine();
 
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(5));
@@ -196,8 +200,11 @@ public class AuraChatService {
         return content;
     }
 
-    /** Ollama yokken kapali liste + saf Turkce markdown yanit. */
-    private String buildFallbackReply(
+    /**
+     * Ollama yokken kapali liste + saf Turkce markdown yanit.
+     * Paket görünür: sıcaklığı sabitleyen birim test aynı paketten çağırır.
+     */
+    String buildFallbackReply(
             String message,
             List<WardrobeItem> wardrobe,
             List<UserPerfume> shelf,
@@ -215,9 +222,7 @@ public class AuraChatService {
                     """.formatted(opening).strip();
         }
 
-        String pieceLine = AuraStylistPrompt.outfitPieces(wardrobe, 4).stream()
-                .map(piece -> "**" + piece + "**")
-                .collect(Collectors.joining(" + "));
+        String pieceLine = fallbackCombination(wardrobe, weather);
 
         String perfumeLine = shelf.isEmpty()
                 ? WardrobeGuardrail.EMPTY_SHELF_LINE
@@ -253,5 +258,27 @@ public class AuraChatService {
 
                 _Aura notu: az parça, net çizgi._
                 """.formatted(opening, pieceLine, climateTip, perfumeLine).strip();
+    }
+
+    /**
+     * Üst, alt, aksesuar sırası. Motorda parça yoksa (yalnızca IGNORED kategori)
+     * eski grup-başına-ilk-parça listesine düşer. Motorun not ve skor metinleri yok.
+     */
+    private String fallbackCombination(List<WardrobeItem> wardrobe, WeatherSnapshot weather) {
+        OutfitRuleEngine.OutfitPlan plan = outfitEngine.suggest(
+                wardrobe,
+                weather.temperatureCelsius(),
+                weather.humidityPercent(),
+                Occasion.CASUAL);
+        List<String> labels = new ArrayList<>();
+        plan.top().ifPresent(pick -> labels.add(AuraStylistPrompt.describePiece(pick.item())));
+        plan.bottom().ifPresent(pick -> labels.add(AuraStylistPrompt.describePiece(pick.item())));
+        plan.accessory().ifPresent(pick -> labels.add(AuraStylistPrompt.describePiece(pick.item())));
+        if (labels.isEmpty()) {
+            labels.addAll(AuraStylistPrompt.outfitPieces(wardrobe, 4));
+        }
+        return labels.stream()
+                .map(label -> "**" + label + "**")
+                .collect(Collectors.joining(" + "));
     }
 }
