@@ -2,6 +2,7 @@ package app.aura.backend.web;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -92,6 +93,11 @@ class AuraChatControllerTest {
                 .andExpect(jsonPath("$.wardrobeCount").value(greaterThanOrEqualTo(2)))
                 .andExpect(jsonPath("$.perfumeCount").value(1))
                 .andExpect(jsonPath("$.weatherSummary").value(containsString("Istanbul")))
+                .andExpect(jsonPath("$.weatherSummary").value(containsString("°C")))
+                .andExpect(jsonPath("$.weatherSummary").value(not(containsString("open-meteo"))))
+                .andExpect(jsonPath("$.weatherSummary").value(not(containsString("simulated"))))
+                .andExpect(jsonPath("$.weatherSummary").value(not(containsString("Partly cloudy"))))
+                .andExpect(jsonPath("$.weatherSummary").value(not(containsString("Clear"))))
                 .andExpect(jsonPath("$.model").value("aura-fallback"));
     }
 

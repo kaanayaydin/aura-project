@@ -38,8 +38,10 @@ public final class AuraStylistPrompt {
 
     static String personaAndRules() {
         return """
-                Sen Aura'nın baş stilistisin. Karbon ve şampanya estetiğini benimsemiş, \
-                sofistike, kibar, nokta atışı öneriler yapan lüks bir moda danışmanısın.
+                Sen Aura'nın kişisel stilistisin. Zevkin sakin, sıcak ve gösterişsiz: \
+                az ama doğru parça, iyi oran, birbirine yakışan tonlar. Kullanıcıyla \
+                güvenilir bir dostun rahatlığıyla, kısa ve net konuşursun. Abartı, \
+                klişe ve satış dili kullanmazsın.
 
                 === SERT KURALLAR (İHLAL YASAK) ===
 
@@ -51,7 +53,7 @@ public final class AuraStylistPrompt {
                 - Parfüm için yalnızca "NİCHE KOKU RAFI" listesindeki şişeleri an. Raf boşsa koku uydurma; \
                 rafı doldurmasını kibarca söyle.
                 - Teknik ID, veritabanı numarası veya ham İngilizce kategori kodu kullanma \
-                ("t-shirt", "#3"). Estetik Türkçe ad kullan: "navy tişört", "minimalist siyah üst".
+                ("t-shirt", "#3"). Estetik Türkçe ad kullan: "lacivert tişört", "minimalist siyah üst".
 
                 DİL — SAF TÜRKÇE:
                 - Kusursuz ve saf Türkçe yaz. Asla Türkçe köke İngilizce ek yapıştırma \
@@ -81,7 +83,7 @@ public final class AuraStylistPrompt {
 
                 İYİ ÖRNEK (biçim):
                 Bugün 26°C — ferah, kontrollü bir siluet.
-                **navy tişört** + **siyah pantolon**; üzerine gerekmez.
+                **lacivert tişört** + **siyah pantolon**; üzerine gerekmez.
                 Koku: **Acqua di Parma — Colonia**.
                 _Aura notu: az parça, net çizgi._
 
@@ -101,7 +103,7 @@ public final class AuraStylistPrompt {
                 weather.locationName(),
                 String.format(Locale.US, "%.1f", weather.temperatureCelsius()),
                 weather.humidityPercent(),
-                weather.condition());
+                WeatherDisplay.conditionTr(weather.condition()));
     }
 
     private static String wardrobeBlock(List<WardrobeItem> wardrobe) {
@@ -160,7 +162,11 @@ public final class AuraStylistPrompt {
         if (raw == null || raw.isBlank()) {
             return "parça";
         }
-        String key = raw.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+        String cleaned = sanitizePromptFragment(raw);
+        if ("bilinmeyen".equals(cleaned)) {
+            return "bilinmeyen";
+        }
+        String key = cleaned.toLowerCase(Locale.ROOT).replace('_', '-');
         return switch (key) {
             case "t-shirt", "tshirt", "tee" -> "tişört";
             case "shirt" -> "gömlek";
@@ -184,7 +190,7 @@ public final class AuraStylistPrompt {
             case "scarf" -> "atkı";
             case "hat", "cap" -> "şapka";
             case "accessory" -> "aksesuar";
-            default -> raw.trim().toLowerCase(Locale.ROOT);
+            default -> key;
         };
     }
 
@@ -192,11 +198,15 @@ public final class AuraStylistPrompt {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        String key = raw.trim().toLowerCase(Locale.ROOT);
+        String cleaned = sanitizePromptFragment(raw);
+        if ("bilinmeyen".equals(cleaned)) {
+            return "bilinmeyen";
+        }
+        String key = cleaned.toLowerCase(Locale.ROOT);
         return switch (key) {
             case "black", "siyah" -> "siyah";
             case "white", "beyaz" -> "beyaz";
-            case "navy", "lacivert" -> "navy";
+            case "navy", "lacivert" -> "lacivert";
             case "grey", "gray", "gri" -> "gri";
             case "beige", "bej" -> "bej";
             case "brown", "kahverengi" -> "kahverengi";
@@ -208,5 +218,25 @@ public final class AuraStylistPrompt {
             case "olive" -> "zeytin yeşili";
             default -> key;
         };
+    }
+
+    /**
+     * Sistem promptuna girecek serbest metin: tek satır, en fazla 40 karakter,
+     * yalnızca harf, rakam, boşluk ve tire. Boş kalırsa {@code bilinmeyen}.
+     */
+    static String sanitizePromptFragment(String raw) {
+        if (raw == null) {
+            return "bilinmeyen";
+        }
+        String flattened = raw.replaceAll("\\p{Cntrl}", " ");
+        String cleaned = flattened.replaceAll("[^\\p{L}\\p{N} -]", "");
+        cleaned = cleaned.trim().replaceAll(" +", " ");
+        if (cleaned.length() > 40) {
+            cleaned = cleaned.substring(0, 40).trim();
+        }
+        if (cleaned.isEmpty()) {
+            return "bilinmeyen";
+        }
+        return cleaned;
     }
 }

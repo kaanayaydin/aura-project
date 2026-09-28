@@ -7,6 +7,7 @@ import app.aura.backend.dto.ChatTurn;
 import app.aura.backend.dto.WeatherSnapshot;
 import app.aura.backend.engine.AuraStylistPrompt;
 import app.aura.backend.engine.WardrobeGuardrail;
+import app.aura.backend.engine.WeatherDisplay;
 import app.aura.backend.model.UserPerfume;
 import app.aura.backend.model.WardrobeItem;
 import app.aura.backend.repository.UserPerfumeRepository;
@@ -40,6 +41,32 @@ public class AuraChatService {
 
     private static final Logger log = LoggerFactory.getLogger(AuraChatService.class);
     private static final int MAX_HISTORY = 12;
+
+    /**
+     * Sohbet uzayınca modele giden turlar: sıra korunur, yalnızca son {@link #MAX_HISTORY}.
+     */
+    static List<ChatTurn> selectRecentHistory(List<ChatTurn> history) {
+        if (history == null || history.isEmpty()) {
+            return List.of();
+        }
+        List<ChatTurn> accepted = new ArrayList<>();
+        for (ChatTurn turn : history) {
+            if (turn == null || turn.role() == null || turn.content() == null) {
+                continue;
+            }
+            String role = turn.role().trim().toLowerCase(Locale.ROOT);
+            if (!role.equals("user") && !role.equals("assistant")) {
+                continue;
+            }
+            String content = turn.content().trim();
+            if (content.isEmpty()) {
+                continue;
+            }
+            accepted.add(new ChatTurn(role, content));
+        }
+        int from = Math.max(0, accepted.size() - MAX_HISTORY);
+        return List.copyOf(accepted.subList(from, accepted.size()));
+    }
 
     private final ChatProperties chatProperties;
     private final WardrobeItemRepository wardrobeItemRepository;
@@ -82,11 +109,7 @@ public class AuraChatService {
         WeatherSnapshot weather = weatherService.current(request.latitude(), request.longitude());
 
         String systemPrompt = AuraStylistPrompt.build(wardrobe, shelf, weather);
-        String weatherSummary = "%.0f°C, %s, %s (%s)".formatted(
-                weather.temperatureCelsius(),
-                weather.condition(),
-                weather.locationName(),
-                weather.source());
+        String weatherSummary = WeatherDisplay.summary(weather);
 
         try {
             String reply = callOllama(systemPrompt, request.message(), request.history());
@@ -139,16 +162,11 @@ public class AuraChatService {
         messages.add(Map.of("role", "system", "content", systemPrompt));
 
         if (history != null) {
-            history.stream()
-                    .filter(turn -> turn != null && turn.role() != null && turn.content() != null)
-                    .filter(turn -> {
-                        String role = turn.role().trim().toLowerCase(Locale.ROOT);
-                        return role.equals("user") || role.equals("assistant");
-                    })
-                    .limit(MAX_HISTORY)
-                    .forEach(turn -> messages.add(Map.of(
-                            "role", turn.role().trim().toLowerCase(Locale.ROOT),
-                            "content", turn.content().trim())));
+            for (ChatTurn turn : selectRecentHistory(history)) {
+                messages.add(Map.of(
+                        "role", turn.role(),
+                        "content", turn.content()));
+            }
         }
         messages.add(Map.of("role", "user", "content", userMessage.trim()));
 
@@ -156,7 +174,9 @@ public class AuraChatService {
         body.put("model", chatProperties.model());
         body.put("messages", messages);
         body.put("stream", false);
-        body.put("options", Map.of("temperature", chatProperties.temperature()));
+        body.put("options", Map.of(
+                "temperature", chatProperties.temperature(),
+                "num_ctx", chatProperties.numCtx()));
 
         JsonNode root = ollamaClient.post()
                 .uri("/api/chat")
@@ -182,10 +202,7 @@ public class AuraChatService {
             List<UserPerfume> shelf,
             WeatherSnapshot weather) {
         String lower = message.toLowerCase(Locale.ROOT);
-        String scene = "%.0f°C, %s — %s".formatted(
-                weather.temperatureCelsius(),
-                weather.condition(),
-                weather.locationName());
+        String scene = WeatherDisplay.summary(weather);
 
         if (wardrobe.isEmpty()) {
             return """

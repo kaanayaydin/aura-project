@@ -85,7 +85,7 @@ class WardrobeGuardrailTest {
         var result = WardrobeGuardrail.filter(raw, sampleWardrobe(), sampleShelf(), weather);
 
         assertThat(result.reply()).contains("dolap listesinden");
-        assertThat(result.reply()).contains("**navy tişört**");
+        assertThat(result.reply()).contains("**lacivert tişört**");
         assertThat(result.reply()).contains("Acqua di Parma");
         assertThat(result.reply()).doesNotContain("perde");
         assertThat(result.reply()).doesNotContain("masa");

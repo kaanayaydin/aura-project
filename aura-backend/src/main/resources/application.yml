@@ -57,6 +57,8 @@ aura:
     model: ${AURA_OLLAMA_MODEL:llama3.2}
     timeout-seconds: ${AURA_OLLAMA_TIMEOUT:90}
     temperature: ${AURA_OLLAMA_TEMPERATURE:0.35}
+    # Ollama 0.34 varsayılanı VRAM'e göre 4k/32k/256k. 12 tur + dolap listesi 4k'ya sığmayabilir.
+    num-ctx: ${AURA_OLLAMA_NUM_CTX:8192}
     # Ollama yoksa baglam tabanli yedek yanit (demo / offline)
     fallback-enabled: ${AURA_CHAT_FALLBACK:true}
   vton:

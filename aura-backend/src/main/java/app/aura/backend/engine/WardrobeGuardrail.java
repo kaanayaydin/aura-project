@@ -100,10 +100,7 @@ public final class WardrobeGuardrail {
             WeatherSnapshot weather) {
         String scene = weather == null
                 ? "bugün"
-                : "%.0f°C, %s — %s".formatted(
-                        weather.temperatureCelsius(),
-                        weather.condition(),
-                        weather.locationName());
+                : WeatherDisplay.summary(weather);
 
         if (wardrobe == null || wardrobe.isEmpty()) {
             return """

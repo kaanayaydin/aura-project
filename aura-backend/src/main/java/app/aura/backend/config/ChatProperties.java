@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param timeoutSeconds    Ollama okuma zaman asimi
  * @param temperature       uretim sicakligi (0-1)
  * @param fallbackEnabled   Ollama yoksa baglam tabanli yerel yanit
+ * @param numCtx            Ollama context penceresi (token)
  */
 @ConfigurationProperties(prefix = "aura.chat")
 public record ChatProperties(
@@ -17,7 +18,8 @@ public record ChatProperties(
         String model,
         int timeoutSeconds,
         double temperature,
-        boolean fallbackEnabled) {
+        boolean fallbackEnabled,
+        int numCtx) {
 
     public ChatProperties {
         if (ollamaBaseUrl == null || ollamaBaseUrl.isBlank()) {
@@ -34,6 +36,9 @@ public record ChatProperties(
         }
         if (temperature > 1.5) {
             temperature = 1.5;
+        }
+        if (numCtx <= 0) {
+            numCtx = 8192;
         }
     }
 }
