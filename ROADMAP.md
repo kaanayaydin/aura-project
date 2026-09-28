@@ -1,6 +1,6 @@
 # AURA — Geliştirme Yol Haritası
 
-**Son güncelleme:** 2026-09-26 — Öncelik değişikliği: altyapı (auth, cloud GPU, storage, güvenlik) tamamlandı; sıradaki odak **ürünün kendisi** — VTON çıktı kalitesi, arayüz tasarımı, AI stylist deneyimi. Kalan altyapı işleri (plan bazlı kota, maliyet izleme, migration script) bilinçli olarak ertelendi, ürün kalitesi turundan sonra ele alınacak.
+**Son güncelleme:** 2026-09-28 — Faz 3b tamamlandı, Faz 3c backend/mobil düzeltmeleri tamamlandı, 3c'nin gerçek konuşma testi bekliyor.
 
 ---
 
@@ -80,15 +80,39 @@ bir ayar değil.
 **Çıkış kriteri:** Beş ekran de yeni palette/tipografiye geçmiş, ham/teknik
 veri kullanıcı arayüzünden temizlenmiş, tek bir tutarlı ikon seti kullanılıyor.
 
+#### 3b Devri (Faz 3b dışı bırakılanlar)
+
+- [ ] Login, register, AuthGate, yön onayı, VTON diyalogları/split view, dolap detay kabuğu ve Lookbook kaydet çizgisi hâlâ eski koyu tema (yalnızca metinleri temizlendi, paleti geçmedi)
+- [ ] Global SnackBarTheme hâlâ koyu
+- [ ] Koku kartında üst/kalp/dip notalar İngilizce
+- [ ] perfume-catalog.json blurb metinlerinde yazım hataları (backend veri)
+- [ ] Dolap ekranı çift kart şüphesi: veri katmanı, DB'de gerçek çift kayıt var mı kontrol edilecek
+- [ ] Sohbet ekranı hava alt yazısı artık Türkçe, ama öneri ekranı hâlâ İngilizce condition'ı mobilde çeviriyor (API sözleşmesi; ileride backend'de tek yerde çözülebilir)
+
 ### 3c. AI Stylist Chat Geliştirmesi
 
 Mevcut chat (Ollama tabanlı, llama3.2) — kalitesi/kişiliği hiç ayrıca değerlendirilmedi.
 
-- [ ] Mevcut chat kalitesinin gerçek konuşmalarla test edilmesi — moda tavsiyesi verirken ne kadar isabetli/ilginç?
-- [ ] Sistem promptunun, Carbon & Champagne markasına uygun bir "stylist kişiliği" ile zenginleştirilmesi
-- [ ] Dolap/hava durumu verisiyle chat'in gerçekten bağlam kullandığının doğrulanması (şu an bağlantı var mı, ne kadar etkin kullanılıyor?)
+- [ ] Mevcut chat kalitesinin gerçek konuşmalarla test edilmesi — moda tavsiyesi verirken ne kadar isabetli/ilginç? (telefonda elle, yeni persona ile)
+- [x] Sistem promptunun, Quiet Luxury markasına uygun (sakin, sıcak, gösterişsiz) stilist kişiliği ile zenginleştirilmesi
+- [x] Dolap/hava durumu verisiyle chat'in gerçekten bağlam kullandığının doğrulanması (kod incelemesiyle doğrulandı: dolap, raf ve hava bloğu prompta giriyor)
+- [x] Sohbet geçmişi hatası düzeltildi (ilk 12 yerine son 12 tur), mobil de son 12 turu gönderiyor
+- [x] Prompt enjeksiyonu savunması (kullanıcı kaynaklı kategori/renk temizleme)
+- [x] Sohbet hava cümlesi Türkçe, kaynak adı sızıntısı kapatıldı
+- [x] humanColor navy -> lacivert
+- [x] Ollama num_ctx ayarı (varsayılan 8192)
 
 **Çıkış kriteri:** Kullanıcı stylist'e bir şey sorduğunda, jenerik bir chatbot değil, "kişisel stilistim" hissi alıyor.
+
+#### 3c Devri (izlenecek / sonraya)
+
+- [ ] Mobil her mesajda sabit İstanbul koordinatı gönderiyor, cihaz GPS'i yok (ürün için gerçek konum gerekir)
+- [ ] Sohbet geçmişi yalnızca bellekte; uygulama kapanınca siliniyor (kalıcı geçmiş "kişisel stilist" hissine katkı yapar)
+- [ ] num_ctx 8192, en kötü durumda (12 tur x 8000 karakter) yetmeyebilir; Ollama taşma davranışı doğrulanmadı. Olası çözüm: geçmişe toplam karakter bütçesi
+- [ ] Başarısız istekte cevapsız kullanıcı turu history'de kalıyor (ileride "yeniden dene" akışı eklenirse ele alınmalı)
+- [ ] Backend doğrulama 400 metni ASCII ("Istek alanlari gecersiz.") ve mobil fieldErrors'ı okumuyor
+- [ ] Dolap 40 parça tavanı: fazlası modele isimsiz ("... ve N parça daha") gidiyor
+- [ ] Yedek cevap yalnızca "parfüm/koku" niyetini ayırt ediyor
 
 ---
 
@@ -117,7 +141,7 @@ Bunlar benim önerim, henüz karara bağlanmadı — hangisi ilginizi çekerse o
 ## Faz 4 — "3D İncele" Özelliği (Faz 3 ile paralel başlanabilir)
 
 - [ ] Depth-Anything/MiDaS ile dolap fotoğraflarından derinlik haritası
-- [ ] Three.js/WebGL tabanlı, Carbon & Champagne temalı "inspect" kartı (parallax + ışık kayması)
+- [ ] Three.js/WebGL tabanlı, Quiet Luxury temalı "inspect" kartı (parallax + ışık kayması)
 - [ ] Flutter entegrasyonu (WebView veya native)
 - [ ] Aura Black'e özel konumlandırma
 
@@ -150,7 +174,7 @@ Bunlar benim önerim, henüz karara bağlanmadı — hangisi ilginizi çekerse o
 
 ## Faz 7 — App Store / Google Play Lansmanı
 
-- [ ] Store listing (Carbon & Champagne diliyle tutarlı)
+- [ ] Store listing (Quiet Luxury diliyle tutarlı)
 - [ ] Gizlilik politikası, KVKK/GDPR uyumluluğu (VTON fotoğrafları hassas veri)
 - [ ] Mağaza inceleme sürecine hazırlık
 - [ ] Soft launch → gözlem → geniş lansman
