@@ -535,6 +535,9 @@ class FavoritesNotifier extends AsyncNotifier<List<OutfitFavorite>> {
 /// Aura AI sohbet oturumu (bellekte; uygulama acik kaldikca).
 final chatProvider = NotifierProvider<ChatNotifier, ChatState>(ChatNotifier.new);
 
+/// Sohbet API'sine giden tur tavanı. Backend AuraChatService.MAX_HISTORY ile aynı.
+const int kChatHistoryLimit = 12;
+
 class ChatState {
   const ChatState({
     this.messages = const [],
@@ -579,9 +582,12 @@ class ChatNotifier extends Notifier<ChatState> {
     final text = raw.trim();
     if (text.isEmpty || state.sending) return;
 
-    final history = state.messages
+    final prior = state.messages
         .where((m) => m.role == 'user' || m.role == 'assistant')
         .toList();
+    final history = prior.length <= kChatHistoryLimit
+        ? prior
+        : prior.sublist(prior.length - kChatHistoryLimit);
 
     final userMessage = ChatMessage(role: 'user', content: text);
     state = state.copyWith(
