@@ -3,8 +3,13 @@ package app.aura.backend.engine;
 import app.aura.backend.dto.WeatherSnapshot;
 import app.aura.backend.model.UserPerfume;
 import app.aura.backend.model.WardrobeItem;
+import java.text.Collator;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Aura bas stilist system prompt — luks moda editoru + anti-halusinasyon kurallari.
@@ -15,6 +20,7 @@ public final class AuraStylistPrompt {
 
     private static final int MAX_WARDROBE_LINES = 40;
     private static final int MAX_PERFUME_LINES = 20;
+    private static final Locale TURKISH = Locale.forLanguageTag("tr");
 
     private AuraStylistPrompt() {
     }
@@ -59,8 +65,8 @@ public final class AuraStylistPrompt {
                 güvenilir bir dostun rahatlığıyla, kısa ve net konuşursun. Abartı, \
                 klişe ve satış dili kullanmazsın.
 
-                Yalnızca Dolabın listesindeki parçaları öner. Listede olmayan bir parça \
-                istenirse "Dolabında böyle bir parça yok" de ve listeden en yakın seçeneği öner.
+                Yalnızca Dolabın listesindeki parçaları öner. Kullanıcı gerçekten listede olmayan \
+                bir parça isterse bunu kendi cümlelerinle kısaca söyle ve listeden en yakın seçeneği öner.
                 Parfüm için yalnızca Parfüm rafın listesindekileri an. Raf boşsa hiçbir parfüm adı verme; \
                 "Parfüm rafın boş, istersen bir şişe ekleyebilirsin" de.
                 Sıcaklığı, nemi ve havayı yalnızca Bugünün havası bölümünden al. Başka bir değer uydurma.
@@ -68,11 +74,15 @@ public final class AuraStylistPrompt {
                 outfit veya look kullanma.
                 Emoji ve satış dili yok. Kısa ve net ol.
                 Kullanıcıya her zaman 'sen' diye hitap et; 'siz' veya 'sizin' kullanma.
-                Dolap notu bir olgudur; aynen doğru kabul et, çelişme, kısaca söyle ve dolaptaki parçalarla devam et.
+                Dolabın ve Parfüm rafın bölümlerinden sonra ek bir bilgi bölümü gelebilir. \
+                Oradaki bilgi doğrudur; onunla çelişme, kısaca kendi cümlelerinle söyle ve bölüm başlığını yazma.
 
                 Önce hava ve ruh halini anlatan tek cümle yaz. Sonra dolaptaki parçalardan kısa bir \
                 kombin öner; parça adlarını **kalın** yaz. Rafta şişe varsa tek parfüm ekle. \
                 En sonda tek cümlelik _Aura notu:_ satırı yaz. Uzun anlatım yok.
+                Bu biçim kıyafet, kombin ve parfüm soruları içindir. Mesaj kıyafetle ilgili değilse \
+                (selam, hal hatır, teşekkür, sohbet) kısa, sıcak ve doğal bir karşılık ver; \
+                dolap, kombin veya parfüm konusuna kendiliğinden geçme.
                 """;
     }
 
@@ -97,16 +107,72 @@ public final class AuraStylistPrompt {
         if (wardrobe.isEmpty()) {
             return "Dolabın: boş\n";
         }
+        List<PieceGroup> groups = groupPieces(wardrobe);
         StringBuilder sb = new StringBuilder();
         sb.append("Dolabın:\n");
-        wardrobe.stream().limit(MAX_WARDROBE_LINES).forEach(item ->
-                sb.append("- ").append(describePiece(item)).append('\n'));
-        if (wardrobe.size() > MAX_WARDROBE_LINES) {
+        groups.stream().limit(MAX_WARDROBE_LINES).forEach(group ->
+                sb.append("- ").append(group.line()).append('\n'));
+        int hidden = groups.stream().skip(MAX_WARDROBE_LINES).mapToInt(PieceGroup::count).sum();
+        if (hidden > 0) {
             sb.append("… ve ")
-                    .append(wardrobe.size() - MAX_WARDROBE_LINES)
+                    .append(hidden)
                     .append(" parça daha (yine yalnızca listeden seç)\n");
         }
         return sb.toString();
+    }
+
+    record PieceGroup(String category, String color, int count) {
+        String label() {
+            return color == null ? category : color + " " + category;
+        }
+
+        String line() {
+            return count > 1 ? label() + " (" + count + " adet)" : label();
+        }
+    }
+
+    /** Aynı (kategori, renk) tek satır; sıra kategori, sonra renk (renksiz önce). */
+    static List<PieceGroup> groupPieces(List<WardrobeItem> wardrobe) {
+        Map<List<String>, Integer> counts = new LinkedHashMap<>();
+        for (WardrobeItem item : wardrobe) {
+            String category = humanCategory(item.getCategory());
+            String color = humanColor(item.getColor());
+            counts.merge(Arrays.asList(category, color), 1, Integer::sum);
+        }
+        Collator collator = Collator.getInstance(TURKISH);
+        Comparator<String> byText = Comparator.nullsFirst(collator::compare);
+        return counts.entrySet().stream()
+                .map(e -> new PieceGroup(e.getKey().get(0), e.getKey().get(1), e.getValue()))
+                .sorted(Comparator.comparing(PieceGroup::category, byText)
+                        .thenComparing(PieceGroup::color, byText))
+                .toList();
+    }
+
+    /**
+     * Kısa kombin için parça adları: üst, alt, dış giyim, ayakkabı ve elbise
+     * gruplarından birer tane, grubu olmayan kategorilerden birer tane. Tekrar yok.
+     */
+    public static List<String> outfitPieces(List<WardrobeItem> wardrobe, int limit) {
+        Map<String, WardrobeItem> chosen = new LinkedHashMap<>();
+        for (WardrobeItem item : wardrobe) {
+            WardrobeFacts.Group group = WardrobeFacts.categoryGroup(item.getCategory());
+            String key = group != null ? group.name() : "~" + humanCategory(item.getCategory());
+            chosen.putIfAbsent(key, item);
+        }
+        return chosen.entrySet().stream()
+                .sorted(Comparator.comparingInt(e -> groupOrder(e.getKey())))
+                .limit(limit)
+                .map(e -> describePiece(e.getValue()))
+                .toList();
+    }
+
+    private static int groupOrder(String key) {
+        for (WardrobeFacts.Group group : WardrobeFacts.Group.values()) {
+            if (group.name().equals(key)) {
+                return group.ordinal();
+            }
+        }
+        return WardrobeFacts.Group.values().length;
     }
 
     private static String perfumeBlock(List<UserPerfume> shelf) {
@@ -124,10 +190,7 @@ public final class AuraStylistPrompt {
     public static String describePiece(WardrobeItem item) {
         String category = humanCategory(item.getCategory());
         String color = humanColor(item.getColor());
-        if (color != null) {
-            return color + " " + category;
-        }
-        return "seçilmiş " + category;
+        return color == null ? category : color + " " + category;
     }
 
     public static String describePerfume(UserPerfume perfume) {

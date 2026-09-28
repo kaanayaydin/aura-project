@@ -79,9 +79,13 @@ class WardrobeFactsTest {
 
     @Test
     void jacketPastThePromptCapStillCounts() {
+        // Dolap listesi artık (kategori, renk) başına tek satır. 40 aynı tişört tek satıra
+        // indiği için tavanı aşmak üzere 40 farklı renkte bluz kullanılıyor; "bluz" sıralamada
+        // "ceket"ten önce geldiği için ceket yine listenin dışında kalıyor.
         List<WardrobeItem> wardrobe = new ArrayList<>();
-        for (int i = 0; i < 40; i++) {
-            wardrobe.add(piece("t-shirt"));
+        for (int i = 1; i <= 40; i++) {
+            wardrobe.add(new WardrobeItem(
+                    "blouse", 0.9, "aGVsbG8=", "image/png", "ton" + (i < 10 ? "0" : "") + i));
         }
         wardrobe.add(piece("jacket"));
         for (int i = 0; i < 4; i++) {

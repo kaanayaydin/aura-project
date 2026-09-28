@@ -37,7 +37,10 @@ class AuraStylistPromptTest {
 
         assertThat(prompt).containsIgnoringCase("kişisel stilistisin");
         assertThat(prompt).doesNotContainIgnoringCase("karbon ve şampanya");
-        assertThat(prompt).contains("Dolabında böyle bir parça yok");
+        // Eskiden tırnaklı "Dolabında böyle bir parça yok" cümlesi zorunluydu; model onu
+        // kıyafetle ilgisiz mesajlarda aynen yankıladığı için kural tırnaksız hale getirildi.
+        assertThat(prompt).doesNotContain("Dolabında böyle bir parça yok");
+        assertThat(prompt).contains("kendi cümlelerinle kısaca söyle");
         assertThat(prompt).containsIgnoringCase("saf Türkçe");
         assertThat(prompt).contains("Bugünün havası:");
         assertThat(prompt).contains("Dolabın:");
@@ -59,7 +62,8 @@ class AuraStylistPromptTest {
     @Test
     void personaForbidsHybridEnglishTurkishAndInventedObjects() {
         String rules = AuraStylistPrompt.personaAndRules() + AuraStylistPrompt.outputContract();
-        assertThat(rules).contains("Dolabında böyle bir parça yok");
+        // Tırnaklı cümle kaldırıldı (bkz. systemPromptEnforcesClosedInventoryAndPureTurkish).
+        assertThat(rules).doesNotContain("Dolabında böyle bir parça yok");
         assertThat(rules).contains("Parfüm rafın boş, istersen bir şişe ekleyebilirsin");
         assertThat(rules).containsIgnoringCase("saf Türkçe");
         assertThat(rules).doesNotContain("navy tişört");
@@ -170,5 +174,115 @@ class AuraStylistPromptTest {
         assertThat(empty).contains("Yağmurlu");
         assertThat(coords).contains("- siyah palto");
         assertThat(coords).contains("Karlı");
+    }
+
+    @Test
+    void rulesDropEchoedSentencesAndHandleSmallTalk() {
+        String rules = AuraStylistPrompt.personaAndRules();
+
+        assertThat(rules).doesNotContain("Dolabında böyle bir parça yok");
+        assertThat(rules).doesNotContain("Dolap notu");
+        assertThat(rules).doesNotContain("bir olgudur");
+        assertThat(rules).contains("ek bir bilgi bölümü");
+        assertThat(rules).contains("bölüm başlığını yazma");
+        assertThat(rules).contains("Mesaj kıyafetle ilgili değilse");
+        assertThat(rules).contains("kendiliğinden geçme");
+        assertThat(rules).contains("her zaman 'sen' diye hitap et");
+        assertThat(rules).contains("En sonda tek cümlelik _Aura notu:_ satırı yaz.");
+    }
+
+    @Test
+    void factBlockTitleIsUnchanged() {
+        String prompt = AuraStylistPrompt.build(
+                List.of(new WardrobeItem("shirt", 0.9, "aGVsbG8=", "image/png", null)),
+                List.of(),
+                new WeatherSnapshot(18.0, 80, "Rain", 61, 41.0, 29.0, "Istanbul", "open-meteo"),
+                "Dolabımda eksik ne var?");
+
+        assertThat(prompt).contains("\nDolap notu:\n");
+    }
+
+    @Test
+    void realWardrobeShapeIsGroupedWithoutPlaceholder() {
+        String prompt = AuraStylistPrompt.build(
+                realWardrobe(), List.of(),
+                new WeatherSnapshot(18.0, 80, "Rain", 61, 41.0, 29.0, "Istanbul", "open-meteo"));
+
+        List<String> bullets = prompt.lines().filter(line -> line.startsWith("- ")).toList();
+        assertThat(prompt).doesNotContain("seçilmiş");
+        assertThat(bullets).containsExactly(
+                "- gömlek (14 adet)",
+                "- pantolon (4 adet)",
+                "- tişört (4 adet)");
+        assertThat(prompt).doesNotContain("parça daha");
+    }
+
+    @Test
+    void coloredPieceKeepsItsColorNextToColorlessGroup() {
+        List<WardrobeItem> wardrobe = new java.util.ArrayList<>(realWardrobe());
+        wardrobe.add(new WardrobeItem("t-shirt", 0.9, "aGVsbG8=", "image/png", "navy"));
+        wardrobe.add(new WardrobeItem("t-shirt", 0.9, "aGVsbG8=", "image/png", "navy"));
+
+        String prompt = AuraStylistPrompt.build(
+                wardrobe, List.of(),
+                new WeatherSnapshot(18.0, 80, "Rain", 61, 41.0, 29.0, "Istanbul", "open-meteo"));
+
+        List<String> bullets = prompt.lines().filter(line -> line.startsWith("- ")).toList();
+        assertThat(bullets).containsExactly(
+                "- gömlek (14 adet)",
+                "- pantolon (4 adet)",
+                "- tişört (4 adet)",
+                "- lacivert tişört (2 adet)");
+    }
+
+    @Test
+    void wardrobeCapCountsHiddenPiecesAfterGrouping() {
+        List<WardrobeItem> wardrobe = new java.util.ArrayList<>();
+        for (int i = 1; i <= 41; i++) {
+            String color = "ton" + (i < 10 ? "0" : "") + i;
+            wardrobe.add(new WardrobeItem("blouse", 0.9, "aGVsbG8=", "image/png", color));
+        }
+        for (int i = 0; i < 3; i++) {
+            wardrobe.add(new WardrobeItem("pants", 0.9, "aGVsbG8=", "image/png", null));
+        }
+
+        String prompt = AuraStylistPrompt.build(
+                wardrobe, List.of(),
+                new WeatherSnapshot(18.0, 80, "Rain", 61, 41.0, 29.0, "Istanbul", "open-meteo"));
+
+        assertThat(prompt.lines().filter(line -> line.startsWith("- ")).count()).isEqualTo(40);
+        assertThat(prompt).contains("- ton40 bluz");
+        assertThat(prompt).doesNotContain("- ton41 bluz");
+        assertThat(prompt).contains("… ve 4 parça daha");
+    }
+
+    @Test
+    void outfitPiecesTakeOnePiecePerGroup() {
+        assertThat(AuraStylistPrompt.outfitPieces(realWardrobe(), 4))
+                .containsExactly("gömlek", "pantolon");
+
+        List<WardrobeItem> mixed = List.of(
+                new WardrobeItem("pants", 0.9, "aGVsbG8=", "image/png", null),
+                new WardrobeItem("watch", 0.9, "aGVsbG8=", "image/png", null),
+                new WardrobeItem("t-shirt", 0.9, "aGVsbG8=", "image/png", "navy"),
+                new WardrobeItem("shirt", 0.9, "aGVsbG8=", "image/png", null),
+                new WardrobeItem("jacket", 0.9, "aGVsbG8=", "image/png", "black"));
+        assertThat(AuraStylistPrompt.outfitPieces(mixed, 4))
+                .containsExactly("lacivert tişört", "pantolon", "siyah ceket", "saat");
+    }
+
+    /** Kullanıcı 2'nin dolap biçimi: 14 gömlek, 4 pantolon, 4 tişört, renk yok. */
+    static List<WardrobeItem> realWardrobe() {
+        List<WardrobeItem> wardrobe = new java.util.ArrayList<>();
+        for (int i = 0; i < 14; i++) {
+            wardrobe.add(new WardrobeItem("shirt", 0.9, "aGVsbG8=", "image/png", null));
+        }
+        for (int i = 0; i < 4; i++) {
+            wardrobe.add(new WardrobeItem("pants", 0.9, "aGVsbG8=", "image/png", null));
+        }
+        for (int i = 0; i < 4; i++) {
+            wardrobe.add(new WardrobeItem("t-shirt", 0.9, "aGVsbG8=", "image/png", null));
+        }
+        return wardrobe;
     }
 }

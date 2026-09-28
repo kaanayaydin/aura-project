@@ -10,6 +10,12 @@ import org.junit.jupiter.api.Test;
 
 class WardrobeGuardrailTest {
 
+    /**
+     * safeOutfit'in devreye girdiğini gösteren cümle. Eskiden iç kural metni
+     * "yalnızca dolap listesinden" kullanılıyordu; kullanıcıya gösterilmediği için değişti.
+     */
+    private static final String SAFE_OUTFIT_MARKER = "Kombin önerim:";
+
     private final WeatherSnapshot weather = new WeatherSnapshot(
             26.0, 55, "Clear", 0, 41.0, 29.0, "Istanbul", "simulated");
 
@@ -85,7 +91,7 @@ class WardrobeGuardrailTest {
 
         var result = WardrobeGuardrail.filter(raw, sampleWardrobe(), sampleShelf(), weather);
 
-        assertThat(result.reply()).contains("dolap listesinden");
+        assertThat(result.reply()).contains(SAFE_OUTFIT_MARKER);
         assertThat(result.reply()).contains("**lacivert tişört**");
         assertThat(result.reply()).contains("Acqua di Parma");
         assertThat(result.reply()).doesNotContain("perde");
@@ -151,7 +157,7 @@ class WardrobeGuardrailTest {
         assertThat(result.reply()).doesNotContain("Aqua");
         assertThat(result.reply()).doesNotContain("Colonia");
         assertThat(result.reply()).contains("**lacivert tişört**");
-        assertThat(result.reply()).doesNotContain("dolap listesinden");
+        assertThat(result.reply()).doesNotContain(SAFE_OUTFIT_MARKER);
     }
 
     @Test
@@ -269,7 +275,7 @@ class WardrobeGuardrailTest {
 
         var result = WardrobeGuardrail.filter(raw, sampleWardrobe(), List.of(), weather);
 
-        assertThat(result.reply()).contains("dolap listesinden");
+        assertThat(result.reply()).contains(SAFE_OUTFIT_MARKER);
         assertThat(result.reply()).doesNotContain("imi");
         assertThat(result.reply()).doesNotContain("ceket");
         assertThat(result.reply()).doesNotContain("etek");
@@ -307,13 +313,13 @@ class WardrobeGuardrailTest {
         var dropped = WardrobeGuardrail.filter(invented, wardrobe, List.of(), weather);
         assertThat(dropped.reply()).doesNotContain("ceket");
         assertThat(dropped.reply()).doesNotContain("imi");
-        assertThat(dropped.reply()).contains("dolap listesinden");
+        assertThat(dropped.reply()).contains(SAFE_OUTFIT_MARKER);
 
         String mixed = "**Lacivert tişört** **-** **kırmızı ceket**";
         var mixedResult = WardrobeGuardrail.filter(mixed, wardrobe, List.of(), weather);
         assertThat(mixedResult.reply()).doesNotContain("kırmızı");
         assertThat(mixedResult.reply()).doesNotContain("**-**");
-        assertThat(mixedResult.reply()).contains("dolap listesinden");
+        assertThat(mixedResult.reply()).contains(SAFE_OUTFIT_MARKER);
     }
 
     @Test
@@ -351,7 +357,7 @@ class WardrobeGuardrailTest {
                 // "top" üç harf: ek almaz, tam kelime olarak hâlâ iddiadır.
                 "**top** yeter.")) {
             var result = WardrobeGuardrail.filter(raw, wardrobe, List.of(), weather);
-            assertThat(result.reply()).as(raw).contains("dolap listesinden");
+            assertThat(result.reply()).as(raw).contains(SAFE_OUTFIT_MARKER);
             assertThat(result.reply()).as(raw).doesNotContain("kravat");
             assertThat(result.reply()).as(raw).doesNotContain("Perde");
             assertThat(result.reply()).as(raw).doesNotContain("ceket");
@@ -421,5 +427,109 @@ class WardrobeGuardrailTest {
 
         assertThat(result.reply()).isEqualTo(raw);
         assertThat(result.droppedLines()).isZero();
+    }
+
+    @Test
+    void factLabelIsStrippedAndTheRestOfTheLineStays() {
+        var result = WardrobeGuardrail.filter(
+                "Dolap notu: Ceket yok, gömlekle devam edelim.",
+                AuraStylistPromptTest.realWardrobe(), List.of(), weather);
+
+        assertThat(result.reply()).isEqualTo("Ceket yok, gömlekle devam edelim.");
+        assertThat(result.mutated()).isTrue();
+    }
+
+    @Test
+    void boldFactLabelIsStrippedToo() {
+        assertThat(WardrobeGuardrail.filter(
+                        "**Dolap notu:** Dolabında dış giyim yok.",
+                        AuraStylistPromptTest.realWardrobe(), List.of(), weather)
+                .reply())
+                .isEqualTo("Dolabında dış giyim yok.");
+    }
+
+    @Test
+    void labelOnlyFactLineIsDroppedOthersKept() {
+        String raw = """
+                Dolap notu:
+                Bugün **gömlek** ile **pantolon** yeter.
+                _Aura notu: sade kal._""";
+
+        var result = WardrobeGuardrail.filter(
+                raw, AuraStylistPromptTest.realWardrobe(), List.of(), weather);
+
+        assertThat(result.reply()).isEqualTo(
+                "Bugün **gömlek** ile **pantolon** yeter.\n_Aura notu: sade kal._");
+        assertThat(result.droppedLines()).isEqualTo(1);
+    }
+
+    @Test
+    void otherCopiedLabelsAreStillDropped() {
+        String raw = """
+                Dolabın: gömlek, pantolon
+                Bugünün havası: 18°C
+                Parfüm rafın: boş
+                Bugün **gömlek** giy.""";
+
+        assertThat(WardrobeGuardrail.filter(
+                        raw, AuraStylistPromptTest.realWardrobe(), List.of(), weather)
+                .reply())
+                .isEqualTo("Bugün **gömlek** giy.");
+    }
+
+    @Test
+    void safeOutfitForRealWardrobeIsPlainAndHasNoRepeats() {
+        String reply = WardrobeGuardrail.safeOutfit(
+                AuraStylistPromptTest.realWardrobe(), List.of(), weather);
+
+        assertNoInternalText(reply);
+        assertThat(reply).contains("Kombin önerim: **gömlek** + **pantolon**.");
+        assertThat(occurrences(reply, "**gömlek**")).isEqualTo(1);
+        assertThat(occurrences(reply, "**tişört**")).isZero();
+        assertThat(occurrences(reply, WardrobeGuardrail.EMPTY_SHELF_LINE)).isEqualTo(1);
+        assertThat(reply).contains("_Aura notu:");
+        assertThat(reply).contains("26°C");
+    }
+
+    @Test
+    void safeOutfitSurvivesItsOwnGuardrail() {
+        String reply = WardrobeGuardrail.safeOutfit(
+                AuraStylistPromptTest.realWardrobe(), List.of(), weather);
+
+        var result = WardrobeGuardrail.filter(
+                reply, AuraStylistPromptTest.realWardrobe(), List.of(), weather);
+
+        assertThat(result.reply()).isEqualTo(reply);
+        assertThat(occurrences(result.reply(), WardrobeGuardrail.EMPTY_SHELF_LINE)).isEqualTo(1);
+    }
+
+    @Test
+    void safeOutfitWithShelfAndEmptyWardrobe() {
+        String withShelf = WardrobeGuardrail.safeOutfit(sampleWardrobe(), sampleShelf(), weather);
+        assertNoInternalText(withShelf);
+        assertThat(withShelf).contains("Koku: **Acqua di Parma — Colonia");
+        assertThat(withShelf).doesNotContain(WardrobeGuardrail.EMPTY_SHELF_LINE);
+
+        String empty = WardrobeGuardrail.safeOutfit(List.of(), List.of(), weather);
+        assertNoInternalText(empty);
+        assertThat(empty).contains("Dolabın henüz boş");
+
+        String noWeather = WardrobeGuardrail.safeOutfit(sampleWardrobe(), List.of(), null);
+        assertNoInternalText(noWeather);
+        assertThat(noWeather).doesNotContain("**bugün**");
+    }
+
+    static void assertNoInternalText(String reply) {
+        assertThat(reply).doesNotContain("seçilmiş");
+        assertThat(reply).doesNotContain("uydurma");
+        assertThat(reply).doesNotContain("yalnızca dolap listesinden");
+        assertThat(reply).doesNotContain("Parfüm önermiyorum");
+        assertThat(reply).doesNotContain("listede yoksa yok");
+        assertThat(reply).doesNotContain("sahne");
+        assertThat(reply).doesNotContainPattern("(?iu)(?<!\\p{L})siz(in)?(?!\\p{L})");
+    }
+
+    private static int occurrences(String text, String needle) {
+        return text.split(java.util.regex.Pattern.quote(needle), -1).length - 1;
     }
 }

@@ -203,60 +203,55 @@ public class AuraChatService {
             List<UserPerfume> shelf,
             WeatherSnapshot weather) {
         String lower = message.toLowerCase(Locale.ROOT);
-        String scene = WeatherDisplay.summary(weather);
+        String opening = "Bugün hava " + WeatherDisplay.summary(weather) + ".";
 
         if (wardrobe.isEmpty()) {
             return """
-                    Bugün sahne **%s**.
+                    %s
 
-                    Dolap listesi boş — kombin uydurmuyorum. Birkaç gerçek parça ekle; \
-                    sonra yalnızca onlarla net bir imaj çizerim.
+                    Dolabın henüz boş. Birkaç parça eklersen sana onlarla bir kombin hazırlarım.
 
-                    _Aura notu: önce envanter, sonra stil._
-                    """.formatted(scene).strip();
+                    _Aura notu: önce dolap, sonra stil._
+                    """.formatted(opening).strip();
         }
 
-        List<String> pieces = wardrobe.stream()
-                .limit(4)
-                .map(AuraStylistPrompt::describePiece)
-                .toList();
-        String pieceLine = pieces.stream()
+        String pieceLine = AuraStylistPrompt.outfitPieces(wardrobe, 4).stream()
                 .map(piece -> "**" + piece + "**")
                 .collect(Collectors.joining(" + "));
 
         String perfumeLine = shelf.isEmpty()
-                ? "Parfüm önermiyorum; raf listesi boş."
+                ? WardrobeGuardrail.EMPTY_SHELF_LINE
                 : "Koku: **" + AuraStylistPrompt.describePerfume(shelf.getFirst()) + "**.";
 
         String climateTip;
         if (weather.temperatureCelsius() >= 24) {
-            climateTip = "Hava sıcak — listedeki hafif üstlerle kal.";
+            climateTip = "Hava sıcak; ince ve hafif parçalarla kal.";
         } else if (weather.temperatureCelsius() <= 10) {
-            climateTip = "Hava serin — listedeki katmanlı üstleri tercih et.";
+            climateTip = "Hava serin; kat kat giyin.";
         } else {
-            climateTip = "Ilık sahne — listedeki dengeli bir üst-alt yeterli.";
+            climateTip = "Hava ılık; bir üst ve bir alt yeter.";
         }
 
         if (lower.contains("parfum") || lower.contains("parfüm") || lower.contains("koku")
                 || lower.contains("sise") || lower.contains("şişe")) {
             return """
-                    Bugün sahne **%s**.
+                    %s
 
                     %s
                     %s
 
-                    _Aura notu: koku, listedeki kombinle aynı cümlede bitsin._
-                    """.formatted(scene, perfumeLine, climateTip).strip();
+                    _Aura notu: koku kombini tamamlasın, bastırmasın._
+                    """.formatted(opening, perfumeLine, climateTip).strip();
         }
 
         return """
-                Bugün sahne **%s**.
+                %s
 
-                Kombin (yalnızca dolap listesinden): %s.
+                Kombin önerim: %s.
                 %s
                 %s
 
-                _Aura notu: listede yoksa yok — uydurma yok._
-                """.formatted(scene, pieceLine, climateTip, perfumeLine).strip();
+                _Aura notu: az parça, net çizgi._
+                """.formatted(opening, pieceLine, climateTip, perfumeLine).strip();
     }
 }

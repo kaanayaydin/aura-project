@@ -72,8 +72,13 @@ public final class WardrobeGuardrail {
     /** Dört harf ve üstü olup ekli hali masum kelimeye çarpan kökler. */
     private static final Set<String> EXACT_STEMS = Set.of("sort", "mont");
 
-    static final String EMPTY_SHELF_LINE =
+    public static final String EMPTY_SHELF_LINE =
             "Parfüm rafın boş; istersen bir şişe ekleyebilirsin.";
+
+    /** Satır başında modelin kopyaladığı ek bilgi başlığı; satırın kalanı korunur. */
+    private static final Pattern FACT_LABEL = Pattern.compile(
+            "^\\s*[*_]*\\s*dolap\\s+notu\\s*[*_]*\\s*:\\s*[*_]*\\s*",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /** Kiyafet disi / sik halusine ugrayan nesneler. */
     private static final Set<String> FORBIDDEN = Set.of(
@@ -122,6 +127,14 @@ public final class WardrobeGuardrail {
         boolean shelfEmpty = shelf == null || shelf.isEmpty();
 
         for (String line : lines) {
+            Matcher factLabel = FACT_LABEL.matcher(line);
+            if (factLabel.find()) {
+                line = line.substring(factLabel.end());
+                if (line.isBlank()) {
+                    dropped++;
+                    continue;
+                }
+            }
             String scrubbed = scrubLine(line, covered);
             if (scrubbed == null) {
                 dropped++;
@@ -175,38 +188,36 @@ public final class WardrobeGuardrail {
             List<WardrobeItem> wardrobe,
             List<UserPerfume> shelf,
             WeatherSnapshot weather) {
-        String scene = weather == null
-                ? "bugün"
-                : WeatherDisplay.summary(weather);
+        String opening = weather == null
+                ? "Bugün için kısa bir önerim var."
+                : "Bugün hava " + WeatherDisplay.summary(weather) + ".";
 
         if (wardrobe == null || wardrobe.isEmpty()) {
             return """
-                    Bugün sahne **%s**.
+                    %s
 
-                    Dolap listesi boş — kombin uydurmuyorum.
+                    Dolabın henüz boş; birkaç parça eklersen sana onlarla bir kombin hazırlarım.
 
-                    _Aura notu: önce envanter, sonra stil._
-                    """.formatted(scene).strip();
+                    _Aura notu: önce dolap, sonra stil._
+                    """.formatted(opening).strip();
         }
 
-        String pieces = wardrobe.stream()
-                .limit(4)
-                .map(AuraStylistPrompt::describePiece)
+        String pieces = AuraStylistPrompt.outfitPieces(wardrobe, 4).stream()
                 .map(label -> "**" + label + "**")
                 .collect(Collectors.joining(" + "));
 
         String perfume = (shelf == null || shelf.isEmpty())
-                ? "Parfüm önermiyorum; raf listesi boş."
+                ? EMPTY_SHELF_LINE
                 : "Koku: **" + AuraStylistPrompt.describePerfume(shelf.getFirst()) + "**.";
 
         return """
-                Bugün sahne **%s**.
-
-                Kombin (yalnızca dolap listesinden): %s.
                 %s
 
-                _Aura notu: listede yoksa yok — uydurma yok._
-                """.formatted(scene, pieces, perfume).strip();
+                Kombin önerim: %s.
+                %s
+
+                _Aura notu: sade ve rahat kal._
+                """.formatted(opening, pieces, perfume).strip();
     }
 
     private static String scrubLine(String line, Set<String> covered) {
