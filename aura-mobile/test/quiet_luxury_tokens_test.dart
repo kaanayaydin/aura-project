@@ -30,7 +30,7 @@ void main() {
     expect(QuietLuxuryNavIcons.raf, isNotNull);
   });
 
-  test('quiet luxury chat, dolap, oneri, arsiv, raf ve ayarlarda kullanilir', () {
+  test('quiet luxury chat, dolap, oneri, arsiv, raf, ayarlar ve alt menude kullanilir', () {
     const allowed = {
       'lib/screens/aura_chat_screen.dart',
       'lib/widgets/chat_bubble.dart',
@@ -44,6 +44,8 @@ void main() {
       'lib/screens/lookbook_screen.dart',
       'lib/screens/perfume_shelf_screen.dart',
       'lib/screens/settings_screen.dart',
+      'lib/screens/home_shell.dart',
+      'lib/widgets/aura_image.dart',
     };
     final offenders = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {

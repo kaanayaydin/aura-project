@@ -32,6 +32,12 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authSessionProvider, (previous, next) {
+      if (previous != null && next == null && context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    });
+
     final hydrated = ref.watch(authHydratedProvider);
     final session = ref.watch(authSessionProvider);
 

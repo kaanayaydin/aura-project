@@ -14,4 +14,13 @@ void main() {
     expect(accordDisplayLabel(''), '');
     expect(accordDisplayLabel('amber'), 'amber');
   });
+
+  test('diffusionDisplayLabel yayilim degerlerini Turkceye cevirir', () {
+    expect(diffusionDisplayLabel('light'), 'hafif');
+    expect(diffusionDisplayLabel('Soft'), 'yumuşak');
+    expect(diffusionDisplayLabel(' moderate '), 'orta');
+    expect(diffusionDisplayLabel('strong'), 'güçlü');
+    expect(diffusionDisplayLabel(''), '');
+    expect(diffusionDisplayLabel('heavy'), 'heavy');
+  });
 }

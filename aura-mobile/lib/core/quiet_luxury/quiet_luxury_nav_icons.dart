@@ -1,10 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-/// Bottom nav Phosphor karşılıkları.
-///
-/// HomeShell hâlâ Material ikon kullanır. Bu dosya yalnızca eşlemedir;
-/// hiçbir ekran onu import etmez.
+/// Bottom nav Phosphor karşılıkları. HomeShell bunları kullanır.
 ///
 /// Dolap   Icons.checkroom   → PhosphorIconsRegular.coatHanger
 /// Oneri   Icons.auto_awesome → PhosphorIconsRegular.sparkle

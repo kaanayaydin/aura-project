@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Kart ve chip köşe yarıçapları. Henüz hiçbir ekrana bağlanmadı.
+/// Kart ve chip köşe yarıçapları. Sohbet, Dolap, Öneri, Arşiv, Raf ve Ayarlar bunları kullanır.
 class AuraRadii {
   AuraRadii._();
 

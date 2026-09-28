@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Quiet Luxury paleti. Aura AI sohbeti bunu kullanır; diğer ekranlar hâlâ [AuraTheme].
+/// Quiet Luxury paleti. Sohbet, Dolap, Öneri, Arşiv, Raf, Ayarlar ve alt menü bunu kullanır.
+/// Giriş, kayıt ve sanal deneme kabuğu hâlâ [AuraTheme].
 class AuraColors {
   AuraColors._();
 
