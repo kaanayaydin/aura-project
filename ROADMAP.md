@@ -69,13 +69,13 @@ bir ayar değil.
 
 **Tipografi:** Başlık = Fraunces (serif, karakterli), Gövde/UI = Manrope
 
-- [ ] 3b.0 — Tasarım sistemi temeli (ThemeData, font, ikon paketi, radius/gölge kuralı)
-- [ ] 3b.1 — Pilot: Aura AI chat ekranı (en düşük risk, sistemi doğrula)
-- [ ] 3b.2 — Dolap ekranı (+ güven skoru gizleme, dil tutarlılığı, duplicate kart kontrolü)
-- [ ] 3b.3 — Öneri ekranı (+ özel slider tasarımı)
-- [ ] 3b.4 — Arşiv ekranı (+ rozet hiyerarşisi, kırmızı ikon düzeltmesi, boş durum metni)
-- [ ] 3b.5 — Raf ekranı IA ayrımı (hesap/çıkış → ayrı Ayarlar ekranı)
-- [ ] 3b.6 — Son öz-eleştiri turu (5 ekranın güncel hali, üç ilkeye göre)
+- [x] 3b.0 — Tasarım sistemi temeli (ThemeData, font, ikon paketi, radius/gölge kuralı)
+- [x] 3b.1 — Pilot: Aura AI chat ekranı (en düşük risk, sistemi doğrula)
+- [x] 3b.2 — Dolap ekranı (+ güven skoru gizleme, dil tutarlılığı, duplicate kart kontrolü)
+- [x] 3b.3 — Öneri ekranı (+ özel slider tasarımı)
+- [x] 3b.4 — Arşiv ekranı (+ rozet hiyerarşisi, kırmızı ikon düzeltmesi, boş durum metni)
+- [x] 3b.5 — Raf ekranı IA ayrımı (hesap/çıkış → ayrı Ayarlar ekranı)
+- [x] 3b.6 — Son öz-eleştiri turu (5 ekranın güncel hali, üç ilkeye göre)
 
 **Çıkış kriteri:** Beş ekran de yeni palette/tipografiye geçmiş, ham/teknik
 veri kullanıcı arayüzünden temizlenmiş, tek bir tutarlı ikon seti kullanılıyor.
